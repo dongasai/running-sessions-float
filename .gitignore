@@ -1,0 +1,10 @@
+# 依赖与安装产物（本仓库的插件以 link 方式安装，不需要提交依赖）
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+
+# 本地日志与临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

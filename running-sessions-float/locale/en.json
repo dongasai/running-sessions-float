@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Running Sessions Dock",
+    "description": "Floats a small dock below the workspace list that lists the sessions currently in progress."
+  }
+}
