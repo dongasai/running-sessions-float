@@ -15,6 +15,7 @@
 | 2026-10-20 | README 安装章节按 `readme-spec` §2.3 重写：Web / git 源（本仓库不可用）/ link 三法 + 让 Agent 装；钉版本改为「克隆 + checkout tag」；装完确认给本机实测的 `--dump-config` 三行输出；四条坑含「清空 bundles 后装配为空」的实测证据；删掉「确认它真的在工作」里重复的装配块，改为指回本章。 |
 | 2026-10-20 | 修正上述安装章节：方式二上一版抄漏了 `git+https://` 写法与 `# 或`、`# 钉版本` 三条命令的原有格式；现按 `readme-spec` 原样补齐，并把三条命令的实际结果（依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，随后 `cannot resolve profile bundle`）写在命令下方。 |
 | 2026-10-20 | 位置修正：坞从 `shell.overlay` 的固定浮层（`left: 10px / bottom: 76px`，会盖住列表）迁到官方 `sidebar.footer.action` 槽位、`order: -10`，成为侧栏底部动作区顶部的一块正常流；56px 窄栏改渲染 36px 计数圆片。同步 `client.js`、smoke（21 → 27 项）、README、IMPLEMENTATION、两份 AGENTS、`.agents/index.json` 与 locale meta。 |
+| 2026-10-20 | 共存修正：坞挂载时把 `sidebar.footer.action` 那一行改成列（`promoteFooterContainer`，另有等价 `:has()` 规则管首帧），官方入口（用量统计 / 会话管理）排在坞下面，不再被全宽坞挤出可视区；坞最高从 `min(46vh, 380px)` 收到 `min(28vh, 200px)`，免得把底部动作区和设置行顶出视口。同步 `client.js`（368 → 417 行）、smoke（27 → 31 项）、README、IMPLEMENTATION、包内 AGENTS 与 `.agents/index.json`。 |
 
 ## 项目是什么
 
@@ -33,7 +34,7 @@
 | 目的 | 命令 |
 |---|---|
 | 语法自检（两半） | `node --check running-sessions-float/index.js && node --check running-sessions-float/client.js` |
-| 冒烟 + 包契约（27 项，先跑这个） | `node test/smoke.mjs` |
+| 冒烟 + 包契约（31 项，先跑这个） | `node test/smoke.mjs` |
 | 校验 manifest | `node -e 'const p=require("./running-sessions-float/package.json");console.log(p.name,p.version,p.dsh)'` |
 | 校验 patch | `python3 -c "import yaml;print(yaml.safe_load(open('running-sessions-float/cordis.patch.yml')))"` |
 | 装进 profile（宿主 shell） | `dsh plugin --profile web add "link:$(realpath running-sessions-float)"` |
@@ -75,20 +76,20 @@ graph TD
 | 模块 | 路径 | 职责 | 入口 | 文档 |
 |---|---|---|---|---|
 | 插件包 | `running-sessions-float/` | 可安装单元：Host 空、浏览器半边注册坞 | `index.js` / `client.js` | [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) |
-| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（27 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
+| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（31 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
 
 模块候选只有这两个：仓库根是文档编排层，没有 `package.json`，不能单独安装。
 
 ## 文件地图
 
 ```text
-client.js        浏览器半边（368 行）：DICTS / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
+client.js        浏览器半边（417 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
 index.js         Host 半边：8 行，空 apply()
 cordis.patch.yml insert id=running-sessions-float → @local/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
 AGENTS.md（包内）模块级文档：职责 / 接口 / 数据形状 / FAQ（不进 npm files 白名单）
-test/smoke.mjs   vm + React 桩渲染 + 包契约，27 项
+test/smoke.mjs   vm + React 桩渲染 + 包契约，31 项
 .agents/index.json 扫描状态：模块清单 / 覆盖率 / 缺口 / 续扫入口
 README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```
@@ -117,6 +118,9 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
    `running-sessions-float`、order `-10`（负值才排在官方动作之前）；该槽没有 patterns。注册必须走
    `ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(...))`，等槽位存在再注册。
    坞**必须是文档流里的块**：不要改回 `position: fixed` / `shell.overlay`，那会重新盖住会话列表。
+   同时**必须把底部动作行改成列**（`promoteFooterContainer` + 等价 `:has()` 规则）：宿主那一行是
+   `flex-direction: row`，全宽的坞不改列就会把 `用量统计` / `会话管理` 等官方入口挤出可视区 ——
+   这是实测踩过的坑，不是可选优化。
 6. **locale 两层**：界面文案只在 `client.js` 的 `DICTS`（zh / en 键必须完全一致，每个 `t('key')`
    两本都要有）；`locale/*.json` 只放插件页 `meta`。`test/smoke.mjs` 会双向查这两条。
 7. **Host 半边保持空**：不要为了「方便」加工具 / 路由 / 状态。那会把纯客户端插件变成 Host 插件，
@@ -129,8 +133,10 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 
 ## 已知设计（不是 bug）
 
-- 坞挂在侧栏底部动作区（`order: -10`），靠 `div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)`
-  把宿主那一行 flex 改成列 —— 宿主改锚点时要跟着改；取舍见 [IMPLEMENTATION.md](IMPLEMENTATION.md)。
+- 坞挂在侧栏底部动作区（`order: -10`），挂载时用 `closest('[data-slot="sidebar.footer.action"]')`
+  找到锚点、把其父元素改成列（另有等价 `:has()` 规则管首帧），官方入口排在坞下面；宿主改锚点时要
+  跟着改，取舍见 [IMPLEMENTATION.md](IMPLEMENTATION.md)。坞最高 `min(28vh, 200px)` —— 底部还有官方
+  入口与设置行，侧栏自己没有滚动条，坞太高会把它们顶出视口。
 - 56px 窄栏只剩 36px 计数圆片：看不到标题、也点不开行 —— 侧栏展开才看列表。
 - 空白会话与 subagent 会话不显示 —— 过滤是刻意的。
 - 未知 `pendingInteraction.kind` 落到「等待回答」—— 归类兜底，不是漏了某个分支。
@@ -144,7 +150,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs   # 27 项，必须 ALL PASS
+node test/smoke.mjs   # 31 项，必须 ALL PASS
 ```
 
 命令行证明不了的部分（位置、遮挡、主题、悬停、语言切换）照 README 的浏览器打勾清单人工核；

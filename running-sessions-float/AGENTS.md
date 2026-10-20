@@ -23,7 +23,7 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 | `package.json` | `exports["."] = ./index.js`、`exports["./client"] = ./client.js`；`dsh.bundle.patch` 指 patch，`dsh.client` 声明 web + 启动即加载 + 依赖 session UI 包 |
 | `cordis.patch.yml` | `insert` 一行：id `running-sessions-float` → `@local/running-sessions-float` |
 | `index.js` | Host 半边，导出空 `apply()`（8 行），只给 bundle 一个挂载入口 |
-| `client.js` | 浏览器半边（368 行）：`DICTS` / `CSS` / `useTranslator` / `pendingLabel` / `RunningSessionsDock` / `apply` |
+| `client.js` | 浏览器半边（417 行）：`DICTS` / `promoteFooterContainer` / `CSS` / `useTranslator` / `pendingLabel` / `RunningSessionsDock` / `apply` |
 
 加载路径：`dsh.client.immediately: true` → 启动即加载，不等面板打开；`inject` 里的
 `@deepseek-ai/dsh-client-ui-session` 先激活，`useSessions` / `useSessionStatus` 才在渲染前就位。
@@ -35,7 +35,7 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 
 | 面 | 契约 |
 |---|---|
-| slot | `sidebar.footer.action`（list 槽，`scope: root`，owner props 只有 `wide`，无 patterns），id `running-sessions-float`，`order: -10`（负值排在官方动作默认 0 之前）；注册走 `ctx.slots.inject(...)` 等槽存在 |
+| slot | `sidebar.footer.action`（list 槽，`scope: root`，owner props 只有 `wide`，无 patterns），id `running-sessions-float`，`order: -10`（负值排在官方动作默认 0 之前）；注册走 `ctx.slots.inject(...)` 等槽存在。挂载时把该行改成列（`promoteFooterContainer`），官方入口排在坞下面 |
 | locale | 命名空间 `local.runningSessions`；en / zh 各 7 个 key（`title` `running` `approval` `plan` `answer` `empty` `openHint`） |
 | inject face | 组件拿到 `{ locale, openSession }`；`openSession` 内部再判 `uiWorkspace.openSession` 是否存在 |
 | 数据入 | slot 标准 props：`useSessions(select)` / `useSessionStatus(select)` |
@@ -50,8 +50,12 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
   一个 `window.__ModuleLoader__.load`**）。
 - 无 `dependencies` / `devDependencies`；`private: true`，未发布 registry。
 - 样式只用主题 token（`--dsw-alias-*`）；坞在正常流里，没有坐标 / 阴影硬编码。
-- 唯一的宿主布局介入：`div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)` 把底部动作行改成列，
-  让坞独占一行；锚点由渲染器的 `SlotOutlet` 提供。
+- 唯一的宿主布局介入（两处同一动作）：坞挂载时的 ref 回调 `promoteFooterContainer` 用
+  `closest('[data-slot="sidebar.footer.action"]')` 找到锚点、把其父元素的 `flex-direction` 置为
+  `column`，卸载时还原；另有一条等价
+  `div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)` 规则管首帧、免闪烁。锚点由渲染器的
+  `SlotOutlet` 提供。**不改列就会把 `用量统计` / `会话管理` 挤出可视区**（实测踩过）。
+- 坞最高 `min(28vh, 200px)`：底部动作区还有官方入口与设置行，侧栏自己没有滚动条。
 - `files` 白名单只含运行文件（`index.js` `client.js` `cordis.patch.yml` `locale/*.json` `icon.svg`），
   **本文件不进包**，只在仓库内给 agent 看。
 
@@ -76,11 +80,12 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs          # 27 项，必须 ALL PASS
+node test/smoke.mjs          # 31 项，必须 ALL PASS
 ```
 
-`test/smoke.mjs` 用 `vm` 加载本包的 `client.js`、React 桩渲染，19 项行为断言（过滤 / 排序 / 四种状态 /
-计数 / 空态 / 点击转发 / locale 回落 / 无 openSession / en 字典注册 / 窄栏圆片与计数 / CSS 无 `position: fixed`）
+`test/smoke.mjs` 用 `vm` 加载本包的 `client.js`、React 桩渲染，23 项行为断言（过滤 / 排序 / 四种状态 /
+计数 / 空态 / 点击转发 / locale 回落 / 无 openSession / en 字典注册 / 窄栏圆片与计数 / CSS 无 `position: fixed` /
+挂载时把底部动作行改成列（锚点是该行唯一子元素时也生效）、卸载时还原）
 + 8 项包契约（client id 与包名一致、注册在 `sidebar.footer.action`、`order < 0`、patch 行指向本包、
 `files` 含运行文件、zh/en 键集合相同、每个 `t()` 键两本都有、只 require react）。
 
@@ -94,7 +99,7 @@ node test/smoke.mjs          # 27 项，必须 ALL PASS
 - **改 `client.js` 页面没变**：装的是副本（git / tarball），或部署没挂 `client-hmr`。
 - **坞一直「暂无进行中」**：确实没有 running / pending 会话，或它们都是 blank / subagent（被刻意过滤）。
 - **点行没反应**：部署里没有 `uiWorkspace`，属降级行为。
-- **坞和官方底部动作挤在同一行**：`:has()` 规则没生效（或被宿主改了 `data-slot` 锚点），坞退化成 row 里的一个 flex 项 —— 数据不受影响，改选择器即可。
+- **坞和官方底部动作挤在同一行**：`promoteFooterContainer` 没找到锚点（宿主改了 `data-slot` 名）或 `closest` 不可用，坞退化成 row 里的一个 flex 项 —— 数据不受影响，改选择器即可。
 - **坞盖住会话列表**：说明被改回了 `position: fixed` / `shell.overlay`，这违反约束 5。
 - **加一个可见文案就红**：smoke 双向校验 zh/en 键与每个 `t()` 键，先补齐 `DICTS` 两本。
 - **不要为了「方便」加 Host 逻辑**：那会改变生效条件、权限与验证方式，等于换一类插件。
@@ -117,3 +122,4 @@ node test/smoke.mjs          # 27 项，必须 ALL PASS
 |---|---|
 | 2026-10-20 | 新建本模块文档（init-architect）：职责 / 入口 / 接口 / 数据形状 / 测试映射，内容取自现有代码与根文档，未移动根 AGENTS.md 原文 |
 | 2026-10-20 | 位置修正：槽位从 `shell.overlay`（fixed、order 60）改为 `sidebar.footer.action`（正常流、order -10），补窄栏圆片与 `:has()` 布局介入；行数 318 → 368、断言 21 → 27。 |
+| 2026-10-20 | 共存修正：挂载时 `promoteFooterContainer` 把槽位所在那一行改成列（锚点是该行唯一子元素时也生效，卸载还原），官方入口排在坞下面；坞最高 200px。行数 368 → 417，断言 27 → 31。 |

@@ -47,19 +47,65 @@ window.__ModuleLoader__.load({
     /** Copy used before the locale service resolves the active language. */
     const FALLBACK = 'zh';
 
+    /** The footer element this dock turned into a column, so it can be undone. */
+    let promotedContainer = null;
+
+    /**
+     * Turn the sidebar's footer action row into a column.
+     *
+     * The slot hands the entry one flex item inside a `display: flex` row; a
+     * full-width dock there would push the official entries out of the sidebar.
+     * The renderer exposes the slot anchor (`data-slot="sidebar.footer.action"`,
+     * `display: contents`), so the anchor's parent is that row — no hashed host
+     * class is touched. The official entries are children of the same anchor,
+     * so they share that flex container and stack below the dock once it is a
+     * column. The CSS `:has()` rule does the same declaratively, but support is
+     * not guaranteed on every client build, so this runs as well.
+     *
+     * @param node - the mounted dock element, or null when it unmounts.
+     * @returns nothing; the effect is on the footer's inline style.
+     */
+    function promoteFooterContainer(node) {
+      if (node === null || node === undefined) {
+        if (promotedContainer !== null) {
+          promotedContainer.style.flexDirection = '';
+          promotedContainer.style.alignItems = '';
+          promotedContainer = null;
+        }
+        return;
+      }
+      const anchor = typeof node.closest === 'function'
+        ? node.closest('[data-slot="sidebar.footer.action"]')
+        : null;
+      const container = anchor ? anchor.parentElement : null;
+      if (!container || !container.style) return;
+      container.style.flexDirection = 'column';
+      container.style.alignItems = 'stretch';
+      promotedContainer = container;
+    }
+
+    /** Stable ref callback: promotes on mount, restores on unmount. */
+    const seatRef = node => promoteFooterContainer(node);
+
     const CSS = `
-/* The sidebar foot lays its action row out as one flex row. The dock wants its
-   own row above the official actions, so this rule turns that row into a
-   column. It addresses the slot anchor the renderer exposes (display:contents,
-   so its children are the flex items) rather than the shell's hashed class. */
+/* The sidebar foot lays its action row out as one flex row, so a full-width
+   block would squeeze the neighbouring entries (usage stats, session manager)
+   out of view. promoteFooterContainer() flips that row to a column from JS; this
+   rule is the same statement declaratively, so the column exists on first paint
+   wherever :has() is supported. Both address the slot anchor the renderer
+   exposes (display:contents, so its children are the flex items) rather than
+   the shell's hashed class. */
 div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
   flex-direction: column;
   align-items: stretch;
 }
+/* Height is deliberately small: the footer also hosts official entries and the
+   settings row, and the sidebar has no scroll of its own — a tall dock would
+   push them past the bottom edge. Overflow scrolls inside the list instead. */
 .rsf-dock {
   flex: none;
   width: 100%;
-  max-height: min(46vh, 380px);
+  max-height: min(28vh, 200px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -302,6 +348,9 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
           className: empty ? 'rsf-dock rsf-empty' : 'rsf-dock',
           role: 'region',
           'aria-label': t('title'),
+          // Promotes the footer row to a column so this block stacks above the
+          // official footer entries instead of squeezing them out of the row.
+          ref: seatRef,
         },
           h('header', { className: 'rsf-head' },
             h('span', {

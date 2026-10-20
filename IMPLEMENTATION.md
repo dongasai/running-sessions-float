@@ -42,19 +42,23 @@ export function apply() {}
 
 代价有两块：坞只能待在侧栏最底部（这正是需求 —— 不遮挡），以及 56px 窄栏放不下列表。后者用 `wide: false` 的 36px 计数圆片兜住：折叠时收起的是列表，不是「有东西在跑」这个事实。
 
-槽位的内容锚点是 `display: contents` 的 `<div data-slot="sidebar.footer.action">`，它的子节点直接成为 `footerActions` 的 flex 项。宿主把这一行做成 `flex-direction: row`，两个占满宽度的动作会互相挤；所以 CSS 里有一条 `div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) { flex-direction: column; align-items: stretch; }`，只在这条路径上生效，把坞放到官方动作上面。选择 `data-slot` 锚点而不是宿主那个 hash 过的类名，是因为渲染器把锚点当作可寻址面（`SlotOutlet`），hash 类名会随构建变。
+槽位的内容锚点是 `display: contents` 的 `<div data-slot="sidebar.footer.action">`，它的子节点直接成为 `footerActions` 的 flex 项。宿主把这一行做成 `flex-direction: row`，一个占满宽度的坞会把同行的 `用量统计` / `会话管理` 挤出可视区（实测就是整排只剩坞）。
+
+所以坞必须先把那一行改成列，而且不能只靠 CSS：`div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)` 只能管首帧、且依赖客户端支持 `:has()`；坞挂载时还会用一个 ref 回调（`promoteFooterContainer`）从自己的节点 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点，把 `anchor.parentElement` 的 `flex-direction` 置为 `column`、`align-items` 置为 `stretch`，卸载时还原成空串。两条路径做的是同一件事，所以谁先到都不冲突。
+
+选 `data-slot` 锚点而不是宿主那个 hash 过的类名，是因为渲染器把锚点当作可寻址面（`SlotOutlet`），hash 类名会随构建变；代价写进了 README 的「已知边界」。
 
 ## 尺寸从哪来
 
 | 常量 | 值 | 依据 |
 |---|---|---|
 | 宽度 | `width: 100%` | 等宽于侧栏内容的可用宽度（侧栏本身有 12px 内边距），不再算 252 / 264 |
-| 最高 | `min(46vh, 380px)` | 行多时在坞内滚动，最多占不到半屏，给列表留出空间 |
+| 最高 | `min(28vh, 200px)` | 行多时在坞内滚动。底部动作区里还有官方入口与设置行，而侧栏自己**没有滚动条** —— 坞一旦超过这个高度，就会把它们顶到视口外面 |
 | 空态 | `padding: 2px 6px` + 11px 文字 | 收成一行细字、无边框，占位成本最小 |
 | 窄栏圆片 | `36px × 36px` | 与同槽位官方 Cordis 动作的 36px 对齐 |
-| 顺序 | `order: -10` | 官方底部动作都用默认 0；负值让坞排到槽位内容区顶部 |
+| 顺序 | `order: -10` | 官方底部动作都用默认 0；负值让坞排到槽位内容区顶部，官方入口在它下面 |
 
-这些值都在 `client.js` 的 `CSS` 常量里（第 50–204 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
+这些值都在 `client.js` 的 `CSS` 常量里（第 90–250 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
 
 ## 过滤规则
 
@@ -149,7 +153,8 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - `locale` 不存在或不完整：`register` / `subscribe` / `bind` 都先做 `typeof` 检查；组件始终能渲染。
 - 状态快照里没有某个会话：用列表快照的 `summary.running` 兜底；都没有就不列。
 - `wide === false`（侧栏折叠成 56px 窄栏）：不渲染列表，只渲染 36px 圆片 + 计数；`aria-label` 写「进行中 · N」，空态写「暂无进行中」。这是唯一按槽位 owner props 分叉的地方，圆片不可点（槽位没给展开侧栏的回调）。
-- `:has()` 不被支持：底部动作行保持 row，坞会和官方动作挤在同一行（宽度被平分），但内容与数据不受影响。
+- `:has()` 不被支持：改列由组件挂载时的 `promoteFooterContainer` 完成，`wide: false` 时不介入（窄栏本来就是一行图标）。
+- 节点没有 `closest`、或锚点被宿主改名：找不到锚点就什么都不改，坞退化成 row 里的一个 flex 项（会挤邻居，但数据与文案不受影响）。
 
 ## 测试策略
 
@@ -164,10 +169,11 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - 没有 `openSession` 时点击不抛异常；
 - en 字典确实注册；
 - 窄栏（`wide: false`）渲染圆片而不是列表，`aria-label` 带计数，空态无计数；
-- CSS 里没有 `position: fixed`，且选择器指向 `data-slot="sidebar.footer.action"`（防止有人把坞改回浮层）。
+- CSS 里没有 `position: fixed`，且选择器指向 `data-slot="sidebar.footer.action"`（防止有人把坞改回浮层）；
+- 挂载时把底部动作行改成列（`flexDirection` / `alignItems`；即使锚点是该行唯一元素子元素也照改），卸载时还原为空串。
 
 另有 8 项包契约，防止 manifest / patch / 槽位漂移：client id 与包名一致、注册在
 `sidebar.footer.action`、`order < 0`（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、
 zh / en 键集合相同、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。
 
-19 + 8 = 27 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。
+23 + 8 = 31 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。
