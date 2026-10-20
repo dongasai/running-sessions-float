@@ -2,7 +2,9 @@
 
 在 DSH Web GUI 的左下角浮一块「进行中」坞：把**正在跑**和**卡在等你处理**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一条细条，只留「暂无进行中」。
 
-官方侧栏本来就会在会话行上标运行状态点（`StateDot`）和待处理状态，但那些行分散在各个工作区分组里 —— 组一折叠就看不见，要判断「现在有几个会话在等我」得逐个展开找。这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running 或 pending 的会话，按最近更新时间排，固定在侧栏左下。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
+官方侧栏本来就会在会话行上标运行状态点（`StateDot`）和待处理状态，但那些行分散在各个工作区分组里 —— 组一折叠就看不见，要判断「现在有几个会话在等我」得逐个展开找。
+
+这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running 或 pending 的会话，按最近更新时间排，固定在侧栏左下。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
 
 | 想知道 | 看 |
 |---|---|
@@ -25,6 +27,8 @@
 | 仅 Web 客户端 | `dsh.client.platform: web`；headless 等没有 Web 客户端的 profile 不加载它 |
 | 不占布局 | 注册在 `shell.overlay`（框架级浮层），不挤压侧栏或主区 |
 | 键盘可达 | 每行是 `<button>`，可 Tab 聚焦，Enter / Space 触发，`:focus-visible` 有品牌色描边 |
+
+**不提供**：停止运行、回答提问 / 批准审批、归档过滤、设置项 / 开关。那些动作属于官方浮层，坞刻意不复制第二套交互。
 
 ## 快速开始
 
@@ -61,15 +65,14 @@ target: link:<仓库绝对路径>/running-sessions-float
 
 `install_bundle` 的 `target` 就是 pnpm 的安装 spec；本地目录给绝对路径或 `link:` 都行。这个动作需要 **danger-full-access** 批准（它会改 profile、装包、可能跑安装脚本）。返回里 `application` 为 `applied` 才算当场生效；`restart-required` 表示这个 profile 在启动时装配，要重启 Harness。
 
-#### 装不上的三种典型原因
+#### 装法四条坑
 
-| 现象 | 原因 | 处理 |
-|---|---|---|
-| 报找不到 `package.json` / `not-bundle` | target 指到了仓库根 | 改指 `.../running-sessions-float/running-sessions-float` |
-| `dsh plugin add` 报 `--profile` 缺失 | 没写 `--profile` | 必填，例如 `--profile web` |
-| 用 git 地址装不出来 | 本仓库的包不在根目录，也没有 tag | 本仓库目前没有可用的 git 直装路径；要分发先把包挪到仓库根（或发到 registry） |
+1. **`--profile` 必填** —— 不写直接报 `required option '--profile <name>'`；例如 `--profile web`。
+2. **只装不启用 = 装了不挂载** —— GUI 里装完还要点「立即启用」；命令行装完用「装完确认」的 `--dump-config` 看装配行在不在。
+3. **git spec 必须带 `github:` / `git+` 前缀**，`git@github.com:...` 这种 scp 写法会被 pnpm 当成本地路径。但**本仓库就算前缀写对也装不了**：包在子目录、仓库根没有 `package.json`，没有可用的 git 直装路径。仓库地址 `https://github.com/dongasai/running-sessions-float.git` 只用于 clone。
+4. **钉版本只能「克隆 + checkout tag」** —— tag `0.1` 真实存在、对应 `0.1.0`；但 `#0.1` 这种 URL 钉法要求仓库根就是包，本仓库不满足。正确做法：`git clone` → `git checkout 0.1` → 按方式一 / 方式三 `link:` 子目录。
 
-本仓库当前版本是 **`0.1.0`**（`running-sessions-float/package.json`），对应 tag **`0.1`**。但包在子目录、仓库根没有 `package.json`，所以钉版本的方式是克隆后 `git checkout 0.1`，再按上面的方式 `link:` 到 `running-sessions-float/` 子目录 —— 不是在 git URL 后面加 `#0.1`。本包 `private: true`、未发布 npm，所以也没有「按包名从 registry 装」这条路；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
+本仓库当前版本是 **`0.1.0`**（`running-sessions-float/package.json`）。本包 `private: true`、未发布 npm，所以也没有「按包名从 registry 装」这条路；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
 
 ### 2. 用起来
 
@@ -84,11 +87,26 @@ target: link:<仓库绝对路径>/running-sessions-float
 ### 3. 确认它真的在工作
 
 - 插件页「已安装」列表里出现 **进行中会话悬浮坞**（英文界面：**Running Sessions Dock**）。
-- 装配层认得它：在宿主 shell 里 `dsh --profile web --dump-config`，输出里能找到 `running-sessions-float` 这一行。
+- 装配层认得它：`dsh --profile web --dump-config` 里能查到装配行（命令与期望输出见下）。
 - 在另一个会话发一条要跑一会儿的消息，回到当前会话：坞里应多出一行「运行中」，计数 +1。
 - 点那一行：主视图切过去。
 - 让某个会话卡在审批上（例如让它执行一条需要确认的命令）：行尾应变成「等待审批」。
 - 把所有会话停下来：坞应收成「暂无进行中」细条。
+
+装配层核对（宿主 shell，只读，不启动服务）：
+
+```bash
+dsh --profile web --dump-config | grep -A1 running-sessions-float
+```
+
+期望输出：
+
+```yaml
+- id: running-sessions-float
+  name: '@local/running-sessions-float'
+```
+
+运行中的实例要重启才会加载新装的插件（插件行在启动时合成）。
 
 看不到坞时按「排错」表逐条对。
 
@@ -205,11 +223,13 @@ running-sessions-float/                 ← 仓库根（不是包）
 
 ### 扩展点占用表
 
-| 扩展点 | 类型 | id / 命名空间 | order | 条件 | 说明 |
-|---|---|---|---:|---|---|
-| `shell.overlay` | list 槽位 | `running-sessions-float` | 60 | 无条件 | 唯一 UI 注册；list 槽按 priority → order 升序渲染 |
-| locale | 字典命名空间 | `local.runningSessions` | — | locale 服务存在时 | 注册 en / zh 各 7 个 key；不在时用内置中文 |
-| `uiWorkspace` | 可选服务 | — | — | 存在时 | 点击行时调用 `openSession`；缺失则点击无动作 |
+| 扩展点 | 类型 | id / 命名空间 | order | priority | patterns | 条件 | 说明 |
+|---|---|---|---:|---|---|---|---|
+| `shell.overlay` | list 槽位 | `running-sessions-float` | 60 | 未设 | 无（该槽没有 patterns） | 无条件 | 唯一 UI 注册；list 槽按 priority → order 升序渲染 |
+| locale | 字典命名空间 | `local.runningSessions` | — | — | — | locale 服务存在时 | 注册 en / zh 各 7 个 key；不在时用内置中文 |
+| `uiWorkspace` | 可选服务 | — | — | — | — | 存在时 | 点击行时调用 `openSession`；缺失则点击无动作 |
+
+不占 `sidebar` / `sidebar.workspaces.*` / `composer.*` 等其它槽位；`shell.overlay` 是本插件唯一的 UI 注册。
 
 ## 安全模型
 
@@ -239,6 +259,9 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 文案不跟随界面语言 | locale 服务不可用，回落中文 | 检查界面语言设置；locale 服务由官方加载 |
 | 坞盖住列表靠下的行 | 固定定位，浮在列表上方 | 已知边界；把列表往上滚，避开被盖住的行 |
 | 卸载后仍被装配 | 只跑了 `pnpm remove`，没取消 bundle 选中 | 从插件页卸载，或用 `plugin_manager` 的 `remove_bundle`（先取消选中再删包） |
+| 按 `#0.1` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.1`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
+| 坞里的行数比侧栏会话少 | 空白会话与 subagent 会话被刻意过滤 | 预期行为；去侧栏对应工作区看它们 |
+| 改了 `locale/*.json` 文案没变 | 那两份只放插件页 meta，坞内文案在 `client.js` 的 `DICTS` | 改 `DICTS` 后重新装；插件页 meta 要重新装配才刷新 |
 
 ## 怎么验证
 
@@ -265,7 +288,7 @@ node test/smoke.mjs
 # 预期：21 行 PASS + ALL PASS
 ```
 
-`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册；另加包契约：client id 与包名一致、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。样式与真实布局只能在浏览器看，见下一节。
+`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **15 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册；另加 **6 项包契约**：client id 与包名一致、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。15 + 6 = 21，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
 
 ### 只能在浏览器里看的（逐条打勾）
 
