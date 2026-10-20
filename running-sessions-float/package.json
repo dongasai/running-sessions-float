@@ -1,6 +1,6 @@
 {
   "name": "@local/running-sessions-float",
-  "version": "1.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Floating dock under the workspace list that shows sessions currently in progress.",
   "type": "module",

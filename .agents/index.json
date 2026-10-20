@@ -1,0 +1,116 @@
+{
+  "generatedAt": "2026-10-20T10:44:32+0800",
+  "generator": "init-architect",
+  "root": {
+    "name": "running-sessions-float",
+    "packageName": "@local/running-sessions-float",
+    "versionSource": "running-sessions-float/package.json",
+    "kind": "single-plugin repository (package lives in a subdirectory; repo root is not installable)",
+    "stack": ["JavaScript (ESM)", "Node 18+ (vm for tests)", "DSH client bundle", "CSS (theme tokens)"],
+    "build": "none",
+    "dependencies": "none",
+    "rootAgents": "AGENTS.md",
+    "docs": ["README.md", "IMPLEMENTATION.md", "AGENTS.md", "running-sessions-float/AGENTS.md"]
+  },
+  "ignoreRules": {
+    "source": ".gitignore",
+    "patterns": [
+      "node_modules/",
+      "package-lock.json",
+      "pnpm-lock.yaml",
+      "*.log",
+      "*.tmp",
+      ".DS_Store",
+      "Thumbs.db"
+    ],
+    "defaultsApplied": false,
+    "matchedFiles": 0,
+    "note": "仓库当前没有 node_modules / lock 文件 / 日志产物，忽略规则命中 0 个文件"
+  },
+  "modules": [
+    {
+      "name": "running-sessions-float",
+      "path": "running-sessions-float/",
+      "role": "可安装插件包：Host 半边为空，浏览器半边在 shell.overlay 注册「进行中」会话坞",
+      "language": "JavaScript (ESM) + CSS",
+      "entry": ["running-sessions-float/index.js", "running-sessions-float/client.js"],
+      "interfaces": [
+        "slot shell.overlay: id=running-sessions-float, order=60, no patterns",
+        "locale namespace local.runningSessions (en/zh, 7 keys each)",
+        "inject face { locale, openSession }",
+        "data in: useSessions / useSessionStatus slot props",
+        "side effect out: uiWorkspace.openSession(id)"
+      ],
+      "config": [
+        "running-sessions-float/package.json (dsh.bundle.patch, dsh.client)",
+        "running-sessions-float/cordis.patch.yml",
+        "running-sessions-float/locale/zh.json",
+        "running-sessions-float/locale/en.json"
+      ],
+      "tests": ["test/smoke.mjs"],
+      "importantPaths": [
+        "running-sessions-float/client.js (318 lines: DICTS/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
+        "running-sessions-float/index.js (8 lines: empty apply)",
+        "running-sessions-float/package.json",
+        "running-sessions-float/cordis.patch.yml"
+      ],
+      "doc": "running-sessions-float/AGENTS.md",
+      "scannedFiles": [
+        "running-sessions-float/package.json",
+        "running-sessions-float/cordis.patch.yml",
+        "running-sessions-float/index.js",
+        "running-sessions-float/client.js",
+        "running-sessions-float/locale/zh.json",
+        "running-sessions-float/locale/en.json"
+      ],
+      "pathOnlyFiles": ["running-sessions-float/icon.svg"],
+      "gaps": []
+    },
+    {
+      "name": "test",
+      "path": "test/",
+      "role": "无 DOM 冒烟 + 包契约：vm 加载 client.js，React 桩渲染，断言 15 项行为 + 6 项契约",
+      "language": "JavaScript (ESM, node:test-free, zero dependency)",
+      "entry": ["test/smoke.mjs"],
+      "interfaces": ["CLI: node test/smoke.mjs (exit 0 = ALL PASS, 21 checks)"],
+      "config": [],
+      "tests": ["test/smoke.mjs"],
+      "importantPaths": ["test/smoke.mjs (209 lines)"],
+      "doc": "AGENTS.md#验证规范 (no dedicated module doc by design)",
+      "scannedFiles": ["test/smoke.mjs"],
+      "pathOnlyFiles": [],
+      "gaps": [
+        "无独立模块文档（有意并入根 AGENTS.md「验证规范」与插件包文档「测试与质量」，避免与 21 项断言重复）"
+      ]
+    }
+  ],
+  "coverage": {
+    "estimatedTotalFiles": 12,
+    "scannedFiles": 11,
+    "pathOnlyFiles": 1,
+    "percent": 91.7,
+    "textFilesFullyRead": 11,
+    "truncated": false,
+    "perModule": {
+      "running-sessions-float": "6/6 文本文件读完；icon.svg 仅记路径",
+      "test": "1/1 读完"
+    },
+    "notRead": [
+      {
+        "path": "running-sessions-float/icon.svg",
+        "reason": "资源文件，按规则只记路径，不读内容"
+      }
+    ]
+  },
+  "gaps": [
+    "浏览器端视觉/交互（固定定位、遮挡、主题跟随、悬停提示、中英切换）没有自动断言，只能在浏览器按 README 清单人工核",
+    "未核对已安装 profile 的实际装配状态：workspace-write 沙箱内 dsh --dump-config 会写 profile 根文件（EROFS），属环境限制而非文档缺口",
+    "test/ 无独立模块文档（有意）：断言细节以 test/smoke.mjs 与其覆盖表为准"
+  ],
+  "nextSteps": [
+    "续扫入口：读本文件 gaps / coverage.notRead，优先补 icon.svg 之外的新增文件",
+    "新增第二个包或子模块时，拆出对应模块级 AGENTS.md 并更新根「模块索引」与 Mermaid 图",
+    "发版时同步 package.json version、git tag、README「结构」表与版本行（三处一起动）",
+    "改动过滤/排序/文案/状态归类时，按根 AGENTS.md「改动连带项」同步 smoke、README、IMPLEMENTATION"
+  ]
+}
