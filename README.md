@@ -32,20 +32,33 @@
 
 ## 快速开始
 
-三件事：装插件 → 用起来 → 确认它真的在工作。
+四步：装 → 确认装配行 → 用 → 卸载。
 
 ### 1. 装插件
 
-三种装法，任选一种。**target 必须指到插件子目录 `running-sessions-float/`，不能指仓库根** —— 根目录没有 `package.json`，装到那一步会失败。
+**target 必须指到插件子目录 `running-sessions-float/`，不能指仓库根** —— 根目录没有 `package.json`，装到那一步会失败。
 
-#### 方式一：Web 插件页（推荐）
+#### 方式一：Web 界面（推荐）
 
 DSH Web → 左侧栏 **插件** → **添加插件** → 填插件子目录的绝对路径（在仓库根执行 `realpath running-sessions-float`）→ **安装** → 装完点 **立即启用**。
 
-- 只装不启用 = 装着但没生效。
-- 「设置 → 内置插件」是只读清单，不能在这里装。
+仓库地址（clone 用）：`https://github.com/dongasai/running-sessions-float.git`
 
-#### 方式二：命令行 · 本地目录（开发）
+- 「添加插件」接受：包名（可带版本）、Git 地址、压缩包、**本地绝对路径**。
+- 装完不点 **立即启用**，就只是「装着但没启用」。
+- 侧栏这个「插件」页才能装和开关；**设置 → 内置插件** 里的清单是只读的。
+
+#### 方式二：命令行 · git 源（分发）
+
+```bash
+# 通用写法；本仓库装不出来，原因见下
+dsh plugin --profile web add github:dongasai/running-sessions-float
+dsh plugin --profile web add github:dongasai/running-sessions-float#0.1
+```
+
+**本仓库这条命令不成立**：仓库根没有 `package.json`，包在 `running-sessions-float/` 子目录，而 pnpm 的 git 依赖不支持子目录；`#0.1` 钉版本同样要求「仓库根就是包」。要钉版本只能走「克隆 + checkout tag」。
+
+#### 方式三：命令行 · 本地目录（link，开发）
 
 ```bash
 # 在仓库根执行；--profile 必填，web 换成你要装进的 profile
@@ -56,23 +69,47 @@ dsh plugin --profile web add "link:$(realpath running-sessions-float)"
 
 这条命令要写 profile 目录，在宿主 shell 里跑；受限的 Agent 沙箱通常写不了 `~/.dsh`。
 
-#### 方式三：让 Agent 用插件管理器
+**让 Agent 装**（等价路径，不是命令行）：`action: install_bundle`、`target: link:<仓库绝对路径>/running-sessions-float`。这个动作需要 **danger-full-access** 批准（它会改 profile、装包、可能跑安装脚本）；返回 `application: applied` 才算当场生效，`restart-required` 表示要重启 Harness。
 
-```text
-action: install_bundle
-target: link:<仓库绝对路径>/running-sessions-float
+#### 钉版本：克隆 + checkout tag
+
+tag `0.1` 真实存在，对应 `package.json` 的 `0.1.0`。`#0.1` 这种 URL 钉法不适用（见方式二），所以钉版本这样装：
+
+```bash
+git clone https://github.com/dongasai/running-sessions-float.git
+cd running-sessions-float
+git checkout 0.1
+dsh plugin --profile web add "link:$(realpath running-sessions-float)"
 ```
 
-`install_bundle` 的 `target` 就是 pnpm 的安装 spec；本地目录给绝对路径或 `link:` 都行。这个动作需要 **danger-full-access** 批准（它会改 profile、装包、可能跑安装脚本）。返回里 `application` 为 `applied` 才算当场生效；`restart-required` 表示这个 profile 在启动时装配，要重启 Harness。
+clone 下来的目录里还有一层同名子目录，`realpath` 要指到里面那层。
 
-#### 装法四条坑
+#### 装完确认
 
-1. **`--profile` 必填** —— 不写直接报 `required option '--profile <name>'`；例如 `--profile web`。
-2. **只装不启用 = 装了不挂载** —— GUI 里装完还要点「立即启用」；命令行装完用「装完确认」的 `--dump-config` 看装配行在不在。
-3. **git spec 必须带 `github:` / `git+` 前缀**，`git@github.com:...` 这种 scp 写法会被 pnpm 当成本地路径。但**本仓库就算前缀写对也装不了**：包在子目录、仓库根没有 `package.json`，没有可用的 git 直装路径。仓库地址 `https://github.com/dongasai/running-sessions-float.git` 只用于 clone。
-4. **钉版本只能「克隆 + checkout tag」** —— tag `0.1` 真实存在、对应 `0.1.0`；但 `#0.1` 这种 URL 钉法要求仓库根就是包，本仓库不满足。正确做法：`git clone` → `git checkout 0.1` → 按方式一 / 方式三 `link:` 子目录。
+命令行可以直接看合成后的 profile 树（只读，不启动服务）：
 
-本仓库当前版本是 **`0.1.0`**（`running-sessions-float/package.json`）。本包 `private: true`、未发布 npm，所以也没有「按包名从 registry 装」这条路；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
+```bash
+dsh --profile web --dump-config | grep -A2 running-sessions-float
+```
+
+期望输出（本机实测）：
+
+```yaml
+# == @local/running-sessions-float
+- id: running-sessions-float
+  name: '@local/running-sessions-float'
+```
+
+**运行中的实例要重启才会加载它**（插件行在启动时合成）。
+
+**四条通用坑**：
+
+1. `--profile` 必填 —— 不写直接报 `error: required option '--profile <name>' not specified`。
+2. 只加依赖、没登记 `dsh.profile.bundles` = 装了不挂载 —— 命令行的 `dsh plugin add` 写的是依赖，挂载还取决于 `bundles`；实测清空 `bundles` 后 `--dump-config` 输出为空，所以装完必须用上面的命令验一遍。
+3. git spec 必须带 `github:` / `git+` 前缀 —— `git@github.com:owner/repo.git` 这种 scp 写法会被 pnpm 当成本地路径，装出一条指向不存在目录的 `link:` 死链。
+4. 钉版本的 tag 必须真实存在 —— 本仓库是 `0.1`（对应 `0.1.0`），但只能用「克隆 + checkout」，不能 URL 钉版本。
+
+本仓库 `private: true`、未发布 npm，**没有 registry 装法**；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
 
 ### 2. 用起来
 
@@ -87,26 +124,11 @@ target: link:<仓库绝对路径>/running-sessions-float
 ### 3. 确认它真的在工作
 
 - 插件页「已安装」列表里出现 **进行中会话悬浮坞**（英文界面：**Running Sessions Dock**）。
-- 装配层认得它：`dsh --profile web --dump-config` 里能查到装配行（命令与期望输出见下）。
+- 装配层认得它：`--dump-config` 里能查到装配行（命令与期望输出见「快速开始 → 装完确认」）。
 - 在另一个会话发一条要跑一会儿的消息，回到当前会话：坞里应多出一行「运行中」，计数 +1。
 - 点那一行：主视图切过去。
 - 让某个会话卡在审批上（例如让它执行一条需要确认的命令）：行尾应变成「等待审批」。
 - 把所有会话停下来：坞应收成「暂无进行中」细条。
-
-装配层核对（宿主 shell，只读，不启动服务）：
-
-```bash
-dsh --profile web --dump-config | grep -A1 running-sessions-float
-```
-
-期望输出：
-
-```yaml
-- id: running-sessions-float
-  name: '@local/running-sessions-float'
-```
-
-运行中的实例要重启才会加载新装的插件（插件行在启动时合成）。
 
 看不到坞时按「排错」表逐条对。
 
