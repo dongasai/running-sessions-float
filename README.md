@@ -182,7 +182,8 @@ target: @local/running-sessions-float
 - **状态色**：运行中用 `--dsw-alias-state-success-primary`；待处理用 `--dsw-alias-state-warn-primary`；其余文字 / 边框 / 背景都走主题 token，明暗主题都跟随。
 - **空态**：不画边框、背景透明，收成 `padding: 2px 6px` 的一行 11px 次级色文字。
 - **位置**：挂在 `sidebar.footer.action` 槽位，`order: -10`，排在所有官方底部动作之前；`width: 100%`，高度由内容决定，最高 `min(28vh, 200px)`。它占真实布局：坞变高时上方会话列表相应变矮，而不是被盖住。
-- **独占一行**：宿主把这一行排成 `flex-direction: row`，全宽的坞会把同行入口挤出去。坞挂载时会把锚点所在的那一行改成列（`promoteFooterContainer`，同时有一条等价的 `:has()` 规则兜首帧），所以官方入口是排在坞**下面**，不是被挤没。
+- **独占一行**：宿主把这一行排成**不换行**的 `flex-direction: row`，而这条生态里的底部入口（用量统计 / 会话管理 / 搜索）都写着 `flex: 0 0 100%`，意思都是「我要占满一整行」。不换行时第一个就把别人挤出可视区。坞挂载时给那一行加 `flex-wrap: wrap`（`promoteFooterContainer`，另有一条等价 `:has()` 规则管首帧），于是每个入口各占一行、都在坞下面。
+- **为什么不是改成列**：试过 `flex-direction: column` —— 列里 `100%` 会按高度算，搜索插件那个入口直接涨成整块 140px，把别人顶出屏幕。只有「可换行的行」同时满足它们的 100% 宽度语义。
 - **窄栏**：侧栏折叠成 56px 窄栏时，槽位只给 `wide: false`，坞换成 36px 圆点 + 计数的圆片（`rsf-rail`），不摊开列表。
 - **点击范围**：坞是普通文档流元素，没有浮层吃掉点击的问题；坞外的内容照常可点。
 
@@ -233,7 +234,7 @@ running-sessions-float/                 ← 仓库根（不是包）
    ├─ package.json                      # name / version / exports / files / dsh.bundle + dsh.client
    ├─ cordis.patch.yml                  # insert 一行插件入口
    ├─ index.js                          # Host 半边：export function apply() {}（8 行）
-   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（417 行）
+   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（429 行）
    ├─ locale/en.json                    # 插件页元数据（meta.title / meta.description）
    ├─ locale/zh.json                    # 同上，中文
    ├─ AGENTS.md                         # 模块级文档（职责 / 接口 / 数据形状 / FAQ）
@@ -245,7 +246,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
 | `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@local/running-sessions-float` |
 | `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
-| `running-sessions-float/client.js` | 417 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
+| `running-sessions-float/client.js` | 429 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
 | `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
 | `running-sessions-float/icon.svg` | 11 | 插件图标 |
 | `AGENTS.md` | — | 给 agent 的命令、硬约束与改动连带项 |
@@ -295,7 +296,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 改了 `client.js` 没变化 | 装的是副本，或部署没挂 `client-hmr` | `link:` 装等推送，没挂就重启 Harness；副本重新安装 |
 | 文案不跟随界面语言 | locale 服务不可用，回落中文 | 检查界面语言设置；locale 服务由官方加载 |
 | 坞把上方会话列表挤短了 | 坞在底部动作区里占的是真实布局，不是浮层 | 预期行为：坞展开时列表相应变短；行多时坞内滚动，最高 200px |
-| 用量统计 / 会话管理 不见了 | 坞没能把那行改成列，全宽坞把兄弟入口挤出可视区 | 看控制台有没有 `closest` 报错；宿主改过 `data-slot` 锚点时改选择器 |
+| 用量统计 / 会话管理 不见了 | 坞没能给那行加 `flex-wrap: wrap`，不换行时全宽坞把兄弟入口挤出可视区 | 看控制台有没有 `closest` 报错；宿主改过 `data-slot` 锚点时改选择器 |
 | 卸载后仍被装配 | 只跑了 `pnpm remove`，没取消 bundle 选中 | 从插件页卸载，或用 `plugin_manager` 的 `remove_bundle`（先取消选中再删包） |
 | 按 `#0.1` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.1`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
 | 坞里的行数比侧栏会话少 | 空白会话与 subagent 会话被刻意过滤 | 预期行为；去侧栏对应工作区看它们 |
@@ -326,7 +327,7 @@ node test/smoke.mjs
 # 预期：31 行 PASS + ALL PASS
 ```
 
-`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **23 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数）、CSS 里没有 `position: fixed`（坞不再浮层）、挂载时把底部动作行改成列（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。23 + 8 = 31，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
+`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **23 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数）、CSS 里没有 `position: fixed`（坞不再浮层）、挂载时把底部动作行改成可换行（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。23 + 8 = 31，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
 
 ### 只能在浏览器里看的（逐条打勾）
 
@@ -355,7 +356,7 @@ node test/smoke.mjs
 - **坞在侧栏最底部，只看得见「进行中」的一屏**：坞最高 `min(28vh, 200px)`，行再多要在坞内滚动。代价：会话特别多时，坞和上方列表抢高度 —— 这是「不遮挡 + 不挤掉官方入口」换来的（浮层不占高度，但会盖住行）。
 - **窄栏只剩计数**：折叠成 56px 窄栏时只有圆点 + 数字，看不到标题、也点不开行。代价：想看列表得先展开侧栏。
 - **靠负 `order` 抢位**：`order: -10` 保证坞排在官方底部动作（默认 0）之前。代价：官方若也发负 order，顺序会变；这是槽位顺序契约，不是坞能单方面决定的。
-- **改宿主布局的代价**：宿主给的槽位内容是 `display: contents` 锚点，本身没有「独占一行」的契约。坞挂载时用 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点、把它的父元素改成 `flex-direction: column`（另有一条等价 `:has()` 规则管首帧），这样官方入口排到坞下面。代价：宿主改这个 `data-slot` 锚点、或换掉这一层容器时，坞会和官方动作挤在同一行，需要回来改选择器。
+- **改宿主布局的代价**：宿主给的槽位内容是 `display: contents` 锚点，本身没有「独占一行」的契约。坞挂载时用 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点、给它父元素加 `flex-wrap: wrap`（另有一条等价 `:has()` 规则管首帧），这样每个入口各占一行、官方入口排在坞下面。代价：宿主改这个 `data-slot` 锚点、或换掉这一层容器时，坞会和官方动作挤在同一行，需要回来改选择器。
 - **只做导航**：点行只切换会话，不能停止运行、不能回答提问 / 审批。那些动作在官方浮层里；坞刻意不复制第二套交互。
 - **不显示「完成未读」**：`completionUnread` 字段没有用上。代价：会话刚跑完就从坞里消失，错过「刚结束」的提醒 —— 那是官方侧栏的职责。
 - **不显示 subagent**：`origin === 'subagent'` 被过滤。代价：子代理在跑什么，得进主会话看；换来的是一个任务不会在坞里裂成多行。

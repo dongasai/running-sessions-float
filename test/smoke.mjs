@@ -207,9 +207,9 @@ check('rail chip with nothing running has no count',
 check('dock CSS is in normal flow, not a fixed overlay',
   !/position:\s*fixed/.test(css) && css.includes('data-slot="sidebar.footer.action"'));
 
-// The lock-up used to be CSS-only (:has). Promote from the component as well, so
-// the official footer entries stack below the dock instead of being squeezed
-// out of the row on clients where :has() is missing.
+// The footer row must be allowed to wrap: every entry asks for a full line with a
+// 100% flex basis, so a non-wrapping row squeezes the official entries out of the
+// sidebar. Promote from the component as well, for clients without :has().
 const seat = view.sections[0]?.props?.ref;
 const closestCalls = [];
 const footerStyle = {};
@@ -226,15 +226,15 @@ const seatNode = {
   },
 };
 seat?.(seatNode);
-check('dock promotes the footer row to a column',
-  typeof seat === 'function' && footerStyle.flexDirection === 'column' && footerStyle.alignItems === 'stretch');
+check('dock makes the footer row wrap',
+  typeof seat === 'function' && footerStyle.flexWrap === 'wrap' && footerStyle.alignItems === 'stretch');
 check('promotion targets the slot anchor, not a hashed host class',
   closestCalls[0] === '[data-slot="sidebar.footer.action"]');
 check('promotion works while the anchor is the row\'s only element child',
-  footerRow.style.flexDirection === 'column' && footerRow.children.length === 1);
+  footerRow.style.flexWrap === 'wrap' && footerRow.children.length === 1);
 seat?.(null);
 check('unmount restores the footer row',
-  footerStyle.flexDirection === '' && footerStyle.alignItems === '');
+  footerStyle.flexWrap === '' && footerStyle.alignItems === '');
 
 check('en dictionary registered', locale.registered?.dicts?.en?.title === 'In progress');
 

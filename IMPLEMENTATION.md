@@ -44,7 +44,9 @@ export function apply() {}
 
 槽位的内容锚点是 `display: contents` 的 `<div data-slot="sidebar.footer.action">`，它的子节点直接成为 `footerActions` 的 flex 项。宿主把这一行做成 `flex-direction: row`，一个占满宽度的坞会把同行的 `用量统计` / `会话管理` 挤出可视区（实测就是整排只剩坞）。
 
-所以坞必须先把那一行改成列，而且不能只靠 CSS：`div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)` 只能管首帧、且依赖客户端支持 `:has()`；坞挂载时还会用一个 ref 回调（`promoteFooterContainer`）从自己的节点 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点，把 `anchor.parentElement` 的 `flex-direction` 置为 `column`、`align-items` 置为 `stretch`，卸载时还原成空串。两条路径做的是同一件事，所以谁先到都不冲突。
+所以坞必须先让那一行**能换行**，而且不能只靠 CSS：`div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)` 只能管首帧、且依赖客户端支持 `:has()`；坞挂载时还会用一个 ref 回调（`promoteFooterContainer`）从自己的节点 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点，把 `anchor.parentElement` 的 `flex-wrap` 置为 `wrap`、`align-items` 置为 `stretch`，卸载时还原成空串。两条路径做的是同一件事，所以谁先到都不冲突。
+
+为什么是 wrap 而不是 column：这条生态里的底部入口（`dsh-all-usage` 的 `.uh-side-entry`、`dsh-session-manager`、`dsh-search-index` 的 `.dsws_root{flex:0 0 100%}`）都用「100% 弹性基准」表达「我要占满一整行」。行里 wrap 时 100% 是宽度，各占一行；换成 column 后 100% 变成高度 —— 实测搜索入口当场涨成 256×139.95，把坞和其它入口一起顶出视口。
 
 选 `data-slot` 锚点而不是宿主那个 hash 过的类名，是因为渲染器把锚点当作可寻址面（`SlotOutlet`），hash 类名会随构建变；代价写进了 README 的「已知边界」。
 
@@ -58,7 +60,7 @@ export function apply() {}
 | 窄栏圆片 | `36px × 36px` | 与同槽位官方 Cordis 动作的 36px 对齐 |
 | 顺序 | `order: -10` | 官方底部动作都用默认 0；负值让坞排到槽位内容区顶部，官方入口在它下面 |
 
-这些值都在 `client.js` 的 `CSS` 常量里（第 90–250 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
+这些值都在 `client.js` 的 `CSS` 常量里（第 99–262 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
 
 ## 过滤规则
 
@@ -153,7 +155,7 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - `locale` 不存在或不完整：`register` / `subscribe` / `bind` 都先做 `typeof` 检查；组件始终能渲染。
 - 状态快照里没有某个会话：用列表快照的 `summary.running` 兜底；都没有就不列。
 - `wide === false`（侧栏折叠成 56px 窄栏）：不渲染列表，只渲染 36px 圆片 + 计数；`aria-label` 写「进行中 · N」，空态写「暂无进行中」。这是唯一按槽位 owner props 分叉的地方，圆片不可点（槽位没给展开侧栏的回调）。
-- `:has()` 不被支持：改列由组件挂载时的 `promoteFooterContainer` 完成，`wide: false` 时不介入（窄栏本来就是一行图标）。
+- `:has()` 不被支持：换行由组件挂载时的 `promoteFooterContainer` 完成，`wide: false` 时不介入（窄栏本来就是一行图标）。
 - 节点没有 `closest`、或锚点被宿主改名：找不到锚点就什么都不改，坞退化成 row 里的一个 flex 项（会挤邻居，但数据与文案不受影响）。
 
 ## 测试策略
@@ -170,7 +172,7 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - en 字典确实注册；
 - 窄栏（`wide: false`）渲染圆片而不是列表，`aria-label` 带计数，空态无计数；
 - CSS 里没有 `position: fixed`，且选择器指向 `data-slot="sidebar.footer.action"`（防止有人把坞改回浮层）；
-- 挂载时把底部动作行改成列（`flexDirection` / `alignItems`；即使锚点是该行唯一元素子元素也照改），卸载时还原为空串。
+- 挂载时把底部动作行改成可换行（`flexWrap` / `alignItems`；即使锚点是该行唯一元素子元素也照改），卸载时还原为空串。
 
 另有 8 项包契约，防止 manifest / patch / 槽位漂移：client id 与包名一致、注册在
 `sidebar.footer.action`、`order < 0`（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、

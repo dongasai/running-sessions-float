@@ -35,7 +35,7 @@
       "language": "JavaScript (ESM) + CSS",
       "entry": ["running-sessions-float/index.js", "running-sessions-float/client.js"],
       "interfaces": [
-        "slot sidebar.footer.action: id=running-sessions-float, order=-10, scope=root, no patterns, owner props { wide }; 挂载时 promoteFooterContainer 把该行 flex-direction 改成 column（含 :has() 兜底），否则会挤掉官方入口",
+        "slot sidebar.footer.action: id=running-sessions-float, order=-10, scope=root, no patterns, owner props { wide }; 挂载时 promoteFooterContainer 给该行加 flex-wrap:wrap（含 :has() 兜底；不能改成 column，100% 基准会按高度算），否则会挤掉官方入口",
         "locale namespace local.runningSessions (en/zh, 7 keys each)",
         "inject face { locale, openSession }; owner props { wide } → wide=false 渲染 36px 计数圆片",
         "data in: useSessions / useSessionStatus slot props",
@@ -49,7 +49,7 @@
       ],
       "tests": ["test/smoke.mjs"],
       "importantPaths": [
-        "running-sessions-float/client.js (417 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
+        "running-sessions-float/client.js (429 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
         "running-sessions-float/index.js (8 lines: empty apply)",
         "running-sessions-float/package.json",
         "running-sessions-float/cordis.patch.yml"

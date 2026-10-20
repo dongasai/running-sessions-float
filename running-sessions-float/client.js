@@ -47,20 +47,29 @@ window.__ModuleLoader__.load({
     /** Copy used before the locale service resolves the active language. */
     const FALLBACK = 'zh';
 
-    /** The footer element this dock turned into a column, so it can be undone. */
+    /** The footer element this dock made wrappable, so it can be undone. */
     let promotedContainer = null;
 
     /**
-     * Turn the sidebar's footer action row into a column.
+     * Let the sidebar's footer action row wrap, one full-width entry per line.
      *
-     * The slot hands the entry one flex item inside a `display: flex` row; a
-     * full-width dock there would push the official entries out of the sidebar.
+     * The slot hands each entry one flex item inside a single `display: flex`
+     * row. Every entry in this ecosystem asks for a full line with
+     * `flex: 0 0 100%` / `width: 100%` (see the sibling footer plugins), which
+     * in a non-wrapping row means "take the whole row and push the others out
+     * of the sidebar" — exactly the bug this dock kept causing.
+     *
+     * Wrapping is the layout those entries were written for: a full-basis item
+     * starts a new line, so the dock gets line one and `用量统计` /
+     * `会话管理` / search keep their own lines below it. Switching the row to
+     * `flex-direction: column` instead is *wrong*: in a column a `100%` basis
+     * resolves against the height, so one sibling entry swallows the whole
+     * footer (observed: 256 x 139.95).
+     *
      * The renderer exposes the slot anchor (`data-slot="sidebar.footer.action"`,
      * `display: contents`), so the anchor's parent is that row — no hashed host
-     * class is touched. The official entries are children of the same anchor,
-     * so they share that flex container and stack below the dock once it is a
-     * column. The CSS `:has()` rule does the same declaratively, but support is
-     * not guaranteed on every client build, so this runs as well.
+     * class is touched. The CSS `:has()` rule states the same thing
+     * declaratively for the first paint; this covers clients without :has().
      *
      * @param node - the mounted dock element, or null when it unmounts.
      * @returns nothing; the effect is on the footer's inline style.
@@ -68,7 +77,7 @@ window.__ModuleLoader__.load({
     function promoteFooterContainer(node) {
       if (node === null || node === undefined) {
         if (promotedContainer !== null) {
-          promotedContainer.style.flexDirection = '';
+          promotedContainer.style.flexWrap = '';
           promotedContainer.style.alignItems = '';
           promotedContainer = null;
         }
@@ -79,7 +88,7 @@ window.__ModuleLoader__.load({
         : null;
       const container = anchor ? anchor.parentElement : null;
       if (!container || !container.style) return;
-      container.style.flexDirection = 'column';
+      container.style.flexWrap = 'wrap';
       container.style.alignItems = 'stretch';
       promotedContainer = container;
     }
@@ -88,22 +97,25 @@ window.__ModuleLoader__.load({
     const seatRef = node => promoteFooterContainer(node);
 
     const CSS = `
-/* The sidebar foot lays its action row out as one flex row, so a full-width
-   block would squeeze the neighbouring entries (usage stats, session manager)
-   out of view. promoteFooterContainer() flips that row to a column from JS; this
-   rule is the same statement declaratively, so the column exists on first paint
-   wherever :has() is supported. Both address the slot anchor the renderer
-   exposes (display:contents, so its children are the flex items) rather than
-   the shell's hashed class. */
+/* The sidebar foot lays its action row out as one non-wrapping flex row, so a
+   full-width entry squeezes its neighbours (usage stats, session manager) out of
+   view. Every footer entry in this ecosystem asks for a full line with a 100%
+   flex basis, so the row only has to be allowed to wrap: each entry then gets
+   its own line. Do NOT switch it to flex-direction:column — a 100% basis would
+   resolve against the height and one sibling would swallow the footer.
+   promoteFooterContainer() does the same from JS for clients without :has().
+   Both address the slot anchor the renderer exposes (display:contents, so its
+   children are the flex items) rather than the shell's hashed class. */
 div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: stretch;
 }
 /* Height is deliberately small: the footer also hosts official entries and the
    settings row, and the sidebar has no scroll of its own — a tall dock would
    push them past the bottom edge. Overflow scrolls inside the list instead. */
 .rsf-dock {
-  flex: none;
+  /* Same "I want a whole line" convention as the sibling footer entries. */
+  flex: 0 0 100%;
   width: 100%;
   max-height: min(28vh, 200px);
   display: flex;
