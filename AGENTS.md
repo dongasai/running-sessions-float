@@ -13,6 +13,7 @@
 | 2026-10-20 | 发布 `0.1`：提交并打附注 tag `0.1`（指向首个正式版本），推送 main 与 tag；README 版本段从「尚未打 tag」改为钉版本示例。 |
 | 2026-10-20 | README 对齐 `note/readme-spec.md`：补「不提供」清单、装法四条坑（含 tag 钉版本与 git 直装限制）、`--dump-config` 期望输出、扩展点表的 priority / patterns 列与「不占槽位」、排错补到 12 行、验证拆分写明 15 + 6 = 21。 |
 | 2026-10-20 | README 安装章节按 `readme-spec` §2.3 重写：Web / git 源（本仓库不可用）/ link 三法 + 让 Agent 装；钉版本改为「克隆 + checkout tag」；装完确认给本机实测的 `--dump-config` 三行输出；四条坑含「清空 bundles 后装配为空」的实测证据；删掉「确认它真的在工作」里重复的装配块，改为指回本章。 |
+| 2026-10-20 | 修正上述安装章节：方式二上一版抄漏了 `git+https://` 写法与 `# 或`、`# 钉版本` 三条命令的原有格式；现按 `readme-spec` 原样补齐，并把三条命令的实际结果（依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，随后 `cannot resolve profile bundle`）写在命令下方。 |
 
 ## 项目是什么
 

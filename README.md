@@ -51,12 +51,21 @@ DSH Web → 左侧栏 **插件** → **添加插件** → 填插件子目录的�
 #### 方式二：命令行 · git 源（分发）
 
 ```bash
-# 通用写法；本仓库装不出来，原因见下
 dsh plugin --profile web add github:dongasai/running-sessions-float
+# 或
+dsh plugin --profile web add git+https://github.com/dongasai/running-sessions-float.git
+# 钉版本（URL 后加 #<tag>，锁到某个发布版本来复现问题 / 稳定使用）
 dsh plugin --profile web add github:dongasai/running-sessions-float#0.1
 ```
 
-**本仓库这条命令不成立**：仓库根没有 `package.json`，包在 `running-sessions-float/` 子目录，而 pnpm 的 git 依赖不支持子目录；`#0.1` 钉版本同样要求「仓库根就是包」。要钉版本只能走「克隆 + checkout tag」。
+`dsh plugin --profile <name> <pnpm args>` 把参数转发给该 profile 目录里的 pnpm。装进来的是**副本**：之后改本仓库代码不影响已装的副本（想边改边用就走方式三）。
+
+- `--profile` **必填**（不写直接报 `required option '--profile <name> not specified'`）。
+- **必须带 `git+` 或 `github:` 前缀**。`git@github.com:owner/repo.git` 这种 scp 写法不会被认成 git spec，pnpm 会把它当路径，装出一条指向不存在目录的 `link:` 死链。
+- **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.1`），tag / 分支 / commit 都行；本仓库当前 tag 是 `0.1`，对应 `package.json` 的 `0.1.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。
+- pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器 bundle，由 Host 直接读盘发出），不会遇到。
+
+**实测：这组命令对本仓库装不出可用副本。** 仓库根没有 `package.json`，pnpm 只认根目录那个包，装进来的依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，`dsh plugin add` 随后报 `cannot resolve profile bundle "running-sessions-float#0.1"`。要真装，走方式三，或先 clone + checkout tag 再 `link:`（见下）。
 
 #### 方式三：命令行 · 本地目录（link，开发）
 
@@ -73,7 +82,7 @@ dsh plugin --profile web add "link:$(realpath running-sessions-float)"
 
 #### 钉版本：克隆 + checkout tag
 
-tag `0.1` 真实存在，对应 `package.json` 的 `0.1.0`。`#0.1` 这种 URL 钉法不适用（见方式二），所以钉版本这样装：
+tag `0.1` 真实存在，对应 `package.json` 的 `0.1.0`。`#0.1` 这种 URL 钉法实测装不出可用副本（见方式二），所以钉版本这样装：
 
 ```bash
 git clone https://github.com/dongasai/running-sessions-float.git
