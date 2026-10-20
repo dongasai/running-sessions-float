@@ -14,7 +14,7 @@ Session Controller（官方，事件驱动）
                      rows = 过滤(blank / subagent) → 保留(running 或 pending) → 按 updatedAt 降序
                                    │
                                    ▼
-                     .rsf-dock（shell.overlay 里的 fixed 元素）
+                     .rsf-dock（sidebar.footer.action 里的正常流元素）
                                    │ 点击行
                                    ▼
                      uiWorkspace.openSession(id) → replaceMain(reveal)
@@ -32,26 +32,29 @@ export function apply() {}
 
 这样一来，插件的全部行为都在 `client.js`，也不存在「Host 改了要重启 Harness」的生效问题。真要加设置项或 Host 统计，才需要把状态搬到 Host，并重新考虑持久化与权限。
 
-## 为什么注册 `shell.overlay`
+## 为什么注册 `sidebar.footer.action`
 
-侧栏没有「工作区列表下方」这种稳定插槽：`sidebar` 是 single 槽，`sidebar.workspaces.*` 是列表行级插槽。把坞塞进会话列表会有两个直接后果：
+坞要的是「在侧栏里占一块、不盖住会话列表」。宿主能给的稳定席位只有侧栏底部这一排动作：
 
-1. 它在列表的滚动容器里，会跟着列表一起滚；
-2. 它受工作区分组折叠影响，组折起来坞就跟着消失。
+- `sidebar` 是 single 槽（整列），`sidebar.workspaces` 是列表里的 single 槽 —— 塞进会话列表会跟着列表一起滚，还会被工作区分组折叠带走。
+- `shell.overlay` 是铺满整个 frame 的浮层：位置只能靠 `position: fixed` 写死，于是它会盖住列表，也不随侧栏宽度 / 折叠变化（旧实现就是这样）。
+- `sidebar.footer.action` 是官方给「设置旁边的底部动作」留的 list 槽，scope `root`、没有 patterns；插进去就是侧栏底部的真实布局，容器在 `footArea > footerActions`。
 
-`shell.overlay` 是框架级 list 槽位，铺满整个 frame、不参与布局，位置由坞自己的 `position: fixed` 决定。代价是**位置写死**：它不是侧栏的子节点，侧栏宽度、折叠、底部留白变化都不会带着它走。README 的「已知边界」把这条写在第一条。
+代价有两块：坞只能待在侧栏最底部（这正是需求 —— 不遮挡），以及 56px 窄栏放不下列表。后者用 `wide: false` 的 36px 计数圆片兜住：折叠时收起的是列表，不是「有东西在跑」这个事实。
 
-## 几何常量从哪来
+槽位的内容锚点是 `display: contents` 的 `<div data-slot="sidebar.footer.action">`，它的子节点直接成为 `footerActions` 的 flex 项。宿主把这一行做成 `flex-direction: row`，两个占满宽度的动作会互相挤；所以 CSS 里有一条 `div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) { flex-direction: column; align-items: stretch; }`，只在这条路径上生效，把坞放到官方动作上面。选择 `data-slot` 锚点而不是宿主那个 hash 过的类名，是因为渲染器把锚点当作可寻址面（`SlotOutlet`），hash 类名会随构建变。
+
+## 尺寸从哪来
 
 | 常量 | 值 | 依据 |
 |---|---|---|
-| 左边距 | `10px` | 贴侧栏左缘；与侧栏的内边距同一量级 |
-| 底边距 | `76px` | 离视口底留出一段距离，不贴死 |
-| 宽度 | `min(252px, calc(100vw - 20px))` | 10 + 252 = 262，落在侧栏最小宽度 264 内；窗口过窄时按视口收 |
-| 最大高度 | `min(46vh, 380px)` | 行多时在坞内滚动，不无限长 |
-| 空态高度 | `padding: 3px 10px` + 11px 文字 | 收成一条细条，尽量少占视线 |
+| 宽度 | `width: 100%` | 等宽于侧栏内容的可用宽度（侧栏本身有 12px 内边距），不再算 252 / 264 |
+| 最高 | `min(46vh, 380px)` | 行多时在坞内滚动，最多占不到半屏，给列表留出空间 |
+| 空态 | `padding: 2px 6px` + 11px 文字 | 收成一行细字、无边框，占位成本最小 |
+| 窄栏圆片 | `36px × 36px` | 与同槽位官方 Cordis 动作的 36px 对齐 |
+| 顺序 | `order: -10` | 官方底部动作都用默认 0；负值让坞排到槽位内容区顶部 |
 
-这些值都在 `client.js` 的 `CSS` 常量里（第 48–178 行），没有读任何布局变量。官方改侧栏最小宽度 / 底部结构时，这里要跟着改。
+这些值都在 `client.js` 的 `CSS` 常量里（第 50–204 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
 
 ## 过滤规则
 
@@ -98,12 +101,12 @@ return { text: t('answer'), tone: 'warn' };
 
 待处理优先于运行中：一个会话既在跑又在等你审批时，行尾显示「等待审批」—— 那才是需要你动手的状态。
 
-## 空态为什么还留一条细条
+## 空态为什么还留一行
 
-没有任何进行中会话时，坞不整个消失，而是收成一条圆角细条（`rsf-empty`）：灰点、11px 次级色文字「暂无进行中」。
+没有任何进行中会话时，坞不整个消失，而是收成一行无边框的细字（`rsf-empty`）：灰点、11px 次级色文字「暂无进行中」。
 
 - 好处：坞有固定座位，「有 → 无」时不会整块跳掉，视线不用重新找。
-- 代价：常驻一条视觉噪音。用次级色、小字号、无计数把它压到最低。
+- 代价：常驻一行视觉噪音。用次级色、小字号、无计数、无边框把它压到最低，也避免在底部动作区里凭空多出一个卡片。
 
 ## locale 两层
 
@@ -116,10 +119,17 @@ return { text: t('answer'), tone: 'warn' };
 ## 注册时序
 
 ```js
-ctx.slots.inject('shell.overlay', () => ctx.slots.register({ ... }, RunningSessionsDock));
+ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+  name: 'sidebar.footer.action',
+  id: 'running-sessions-float',
+  order: -10,
+  ...
+}, RunningSessionsDock));
 ```
 
-`slots.inject` 等槽位真正存在才注册，避免布局包与插件包的加载顺序问题。`package.json` 里 `dsh.client.immediately: true` 让客户端半边在启动时就加载，不用等某个面板被打开；`dsh.client.inject` 声明依赖 `@deepseek-ai/dsh-client-ui-session`，保证 `useSessions` / `useSessionStatus` 这两个标准 props 在组件渲染前就位。
+`slots.inject` 等槽位真正存在才注册，避免布局包与插件包的加载顺序问题。`package.json` 里 `dsh.client.immediately: true` 让客户端半边在启动时就加载，不用等某个面板被打开；`dsh.client.inject` 声明依赖 `@deepseek-ai/dsh-client-ui-session`，保证 `useSessions` / `useSessionStatus` 这两个全局标准 props 在组件渲染前就位 —— `sidebar.footer.action` 是 `scope: root` 的槽位，和 `shell.overlay` 一样拿得到这两个 Hook。
+
+`order: -10` 是「排在内容区顶部」的唯一手段：list 槽按 order 升序渲染，官方动作没有写 order（默认 0），负值就排在它们前面。
 
 ## 生效路径（改 client.js 后发生了什么）
 
@@ -138,6 +148,8 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - `uiWorkspace` 不存在：`openSession` 是 `undefined`，点击处理里 `if (openSession)` 直接跳过；按钮仍可聚焦、可点，只是不导航。
 - `locale` 不存在或不完整：`register` / `subscribe` / `bind` 都先做 `typeof` 检查；组件始终能渲染。
 - 状态快照里没有某个会话：用列表快照的 `summary.running` 兜底；都没有就不列。
+- `wide === false`（侧栏折叠成 56px 窄栏）：不渲染列表，只渲染 36px 圆片 + 计数；`aria-label` 写「进行中 · N」，空态写「暂无进行中」。这是唯一按槽位 owner props 分叉的地方，圆片不可点（槽位没给展开侧栏的回调）。
+- `:has()` 不被支持：底部动作行保持 row，坞会和官方动作挤在同一行（宽度被平分），但内容与数据不受影响。
 
 ## 测试策略
 
@@ -150,10 +162,12 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - 点击把 id 转发给 `openSession`；
 - 没有 locale 服务时回落中文；
 - 没有 `openSession` 时点击不抛异常；
-- en 字典确实注册。
+- en 字典确实注册；
+- 窄栏（`wide: false`）渲染圆片而不是列表，`aria-label` 带计数，空态无计数；
+- CSS 里没有 `position: fixed`，且选择器指向 `data-slot="sidebar.footer.action"`（防止有人把坞改回浮层）。
 
-另有 6 项包契约，防止 manifest / patch / 字典漂移：client id 与包名一致、patch 行指向本包、
-`files` 含运行文件、zh / en 键集合相同、源码里每个 `t('key')` 两本字典都有、client bundle 只
-`require('react')`。
+另有 8 项包契约，防止 manifest / patch / 槽位漂移：client id 与包名一致、注册在
+`sidebar.footer.action`、`order < 0`（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、
+zh / en 键集合相同、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。
 
-21 项。样式、布局、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。
+19 + 8 = 27 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。

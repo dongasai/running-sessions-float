@@ -1,9 +1,11 @@
 /**
- * Client half of the running-sessions floating dock.
+ * Client half of the running-sessions dock.
  *
- * The dock is one `shell.overlay` entry: a frame-wide floating layer that is
- * click-through by default, so the entry re-enables pointer events for itself
- * and sits above the sidebar's lower edge, directly under the workspace list.
+ * The dock is one `sidebar.footer.action` entry: it participates in layout at
+ * the top of the sidebar's foot action area, above the official footer
+ * actions, so it never covers the workspace/session list the way a fixed
+ * overlay did. The sidebar collapses to a 56px rail; there the entry becomes a
+ * compact count chip instead of a full-width list.
  *
  * Data comes from the framework standard hooks the slot already provides:
  * `useSessions` (session catalog with `displayTitle`/`running`/`updatedAt`) and
@@ -46,34 +48,37 @@ window.__ModuleLoader__.load({
     const FALLBACK = 'zh';
 
     const CSS = `
+/* The sidebar foot lays its action row out as one flex row. The dock wants its
+   own row above the official actions, so this rule turns that row into a
+   column. It addresses the slot anchor the renderer exposes (display:contents,
+   so its children are the flex items) rather than the shell's hashed class. */
+div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
+  flex-direction: column;
+  align-items: stretch;
+}
 .rsf-dock {
-  position: fixed;
-  left: 10px;
-  bottom: 76px;
-  width: min(252px, calc(100vw - 20px));
+  flex: none;
+  width: 100%;
   max-height: min(46vh, 380px);
   display: flex;
   flex-direction: column;
   gap: 4px;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 6px 8px;
   border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-overlay);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
-  pointer-events: auto;
   font-size: 12px;
   line-height: 1.45;
 }
-/* Idle posture: one thin, low-contrast strip that keeps the dock's seat
-   visible without claiming space over the workspace list. */
+/* Idle posture: one thin, unframed line, so an empty dock costs the smallest
+   possible slice of the foot area without disappearing entirely. */
 .rsf-dock.rsf-empty {
   gap: 0;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
 }
 .rsf-dock.rsf-empty .rsf-head {
   padding: 0;
@@ -83,6 +88,26 @@ window.__ModuleLoader__.load({
   font-size: 11px;
   font-weight: 400;
   color: var(--dsw-alias-label-secondary);
+}
+/* Collapsed rail: the foot is 56px wide and centers one icon, so the entry
+   shrinks to a round count chip instead of squeezing the list. */
+.rsf-rail {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.rsf-rail.rsf-idle {
+  background: transparent;
 }
 .rsf-head {
   display: flex;
@@ -130,6 +155,7 @@ window.__ModuleLoader__.load({
   margin: 0;
   padding: 0;
   list-style: none;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -213,13 +239,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The floating dock. Collapses to a thin idle strip while no session is
-     * in progress, so its seat stays visible without covering the list.
-     * @param props - slot standard hooks, the plugin's inject face, and locale.
-     * @returns the dock element or the idle strip.
+     * The dock. Renders a full-width block in the sidebar foot (wide sidebar)
+     * or a round count chip (collapsed rail), never an overlay.
+     * @param props - slot owner props (`wide`) + standard hooks, the plugin's
+     * inject face, and locale.
+     * @returns the dock element, the rail chip, or (wide) an idle strip.
      */
     function RunningSessionsDock(props) {
-      const { useSessions, useSessionStatus, openSession, locale } = props;
+      const { useSessions, useSessionStatus, openSession, locale, wide } = props;
       const t = useTranslator(locale);
       const list = useSessions(state => state);
       const statuses = useSessionStatus(state => state);
@@ -247,6 +274,27 @@ window.__ModuleLoader__.load({
       }, [list, statuses, t]);
 
       const empty = rows.length === 0;
+
+      // The rail has no room for a list; it shows the count so collapsing the
+      // sidebar hides the rows, not the fact that something is running.
+      if (wide === false) {
+        const railLabel = empty ? t('empty') : t('title') + ' · ' + rows.length;
+        return h(React.Fragment, null,
+          h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
+          h('div', {
+            className: empty ? 'rsf-rail rsf-idle' : 'rsf-rail',
+            role: 'status',
+            title: railLabel,
+            'aria-label': railLabel,
+          },
+            h('span', {
+              className: empty ? 'rsf-pulse rsf-idle' : 'rsf-pulse',
+              'aria-hidden': true,
+            }),
+            empty ? null : h('span', { className: 'rsf-rail-count' }, String(rows.length)),
+          ),
+        );
+      }
 
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
@@ -283,7 +331,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       /**
-       * Register the dock into the frame-wide overlay and its locale copy.
+       * Register the dock into the sidebar foot action slot and its locale copy.
        * @param ctx - Client Cordis context.
        */
       apply(ctx) {
@@ -292,10 +340,12 @@ window.__ModuleLoader__.load({
           ctx.effect(() => locale.register(NS, DICTS), 'running-sessions-float: dictionaries');
         }
         const uiWorkspace = ctx.get('uiWorkspace');
-        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-          name: 'shell.overlay',
+        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+          name: 'sidebar.footer.action',
           id: 'running-sessions-float',
-          order: 60,
+          // Negative order puts the dock above every official footer action
+          // (they all keep the default 0), i.e. at the top of the slot content.
+          order: -10,
           label: () => {
             if (locale && typeof locale.bind === 'function') {
               const bound = locale.bind(NS);

@@ -1,15 +1,15 @@
 # @local/running-sessions-float
 
-在 DSH Web GUI 的左下角浮一块「进行中」坞：把**正在跑**和**卡在等你处理**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一条细条，只留「暂无进行中」。
+在 DSH Web GUI 左侧栏底部的动作区里放一块「进行中」坞：把**正在跑**和**卡在等你处理**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一行细字，只留「暂无进行中」。坞是布局里的真实一块，排在这排动作的最上面，**不浮在会话列表上**。
 
 官方侧栏本来就会在会话行上标运行状态点（`StateDot`）和待处理状态，但那些行分散在各个工作区分组里 —— 组一折叠就看不见，要判断「现在有几个会话在等我」得逐个展开找。
 
-这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running 或 pending 的会话，按最近更新时间排，固定在侧栏左下。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
+这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running 或 pending 的会话，按最近更新时间排，固定在侧栏底部动作区。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
 
 | 想知道 | 看 |
 |---|---|
 | 怎么装、怎么用、怎么排错 | 本文件 |
-| 为什么这么实现（overlay 取舍、过滤规则、空态、locale 降级） | [IMPLEMENTATION.md](IMPLEMENTATION.md) |
+| 为什么这么实现（槽位取舍、过滤规则、空态、locale 降级） | [IMPLEMENTATION.md](IMPLEMENTATION.md) |
 | 给 agent 的约束、命令、改动连带项 | [AGENTS.md](AGENTS.md) |
 
 本仓库是 DSH 独立插件仓库，当前只有这一个插件；包体在 `running-sessions-float/` 子目录，**仓库根不是包**。
@@ -22,10 +22,10 @@
 | 待处理聚合 | 有 `pendingInteraction` 的会话进坞，按类型显示「等待审批 / 计划待审 / 等待回答」；待处理优先于运行中 |
 | 一键切换 | 点行调用 `uiWorkspace.openSession`，主视图切到该会话 |
 | 计数徽标 | 坞头右侧显示当前行数 |
-| 空态细条 | 无进行中会话时收成圆角细条，灰点静止，不显示计数 |
+| 空态细行 | 无进行中会话时收成一行无边框细字，灰点静止，不显示计数 |
 | 中英双语 | 内置 zh / en 两套文案，跟随界面语言；locale 服务缺失时回落中文 |
 | 仅 Web 客户端 | `dsh.client.platform: web`；headless 等没有 Web 客户端的 profile 不加载它 |
-| 不占布局 | 注册在 `shell.overlay`（框架级浮层），不挤压侧栏或主区 |
+| 占位不遮挡 | 注册在 `sidebar.footer.action`（侧栏底部动作区），是布局里的真实一块，不盖住会话列表 |
 | 键盘可达 | 每行是 `<button>`，可 Tab 聚焦，Enter / Space 触发，`:focus-visible` 有品牌色描边 |
 
 **不提供**：停止运行、回答提问 / 批准审批、归档过滤、设置项 / 开关。那些动作属于官方浮层，坞刻意不复制第二套交互。
@@ -122,22 +122,22 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 
 ### 2. 用起来
 
-装完等一两秒 —— 客户端半边在启动时加载，Web 组合会通过 `client-hmr` 把新模块推给页面；没出现就刷新一次页面。左下角出现坞：
+装完等一两秒 —— 客户端半边在启动时加载，Web 组合会通过 `client-hmr` 把新模块推给页面；没出现就刷新一次页面。侧栏底部、设置行上方出现坞：
 
 1. 有进行中 / 待处理会话时，坞头是「进行中」+ 计数徽标，下面一行一个会话：左边标题、右边状态。
 2. 行按会话的 `updatedAt` **从新到旧**排；刚发过消息的会话在最上面。
 3. **点一行**：主视图切到那个会话（不是开新页签）。悬停有提示「打开这个会话 — 标题」。
-4. 没有这样的会话时：坞收成一条细条，文字「暂无进行中」，绿点变灰点、停止脉冲。
+4. 没有这样的会话时：坞收成一行无边框细字，文字「暂无进行中」，绿点变灰点、停止脉冲。
 5. 行多了列表在坞内滚动（坞最高 `min(46vh, 380px)`）。
 
 ### 3. 确认它真的在工作
 
-- 插件页「已安装」列表里出现 **进行中会话悬浮坞**（英文界面：**Running Sessions Dock**）。
+- 插件页「已安装」列表里出现 **进行中会话坞**（英文界面：**Running Sessions Dock**）。
 - 装配层认得它：`--dump-config` 里能查到装配行（命令与期望输出见「快速开始 → 装完确认」）。
 - 在另一个会话发一条要跑一会儿的消息，回到当前会话：坞里应多出一行「运行中」，计数 +1。
 - 点那一行：主视图切过去。
 - 让某个会话卡在审批上（例如让它执行一条需要确认的命令）：行尾应变成「等待审批」。
-- 把所有会话停下来：坞应收成「暂无进行中」细条。
+- 把所有会话停下来：坞应收成一行「暂无进行中」细字。
 
 看不到坞时按「排错」表逐条对。
 
@@ -163,11 +163,13 @@ target: @local/running-sessions-float
 │  · 会话 2                  │
 │  · 会话 3                  │
 │                            │
-│  ┌──────────────────────┐  │ ← 坞：左下 10px / 距底 76px
-│  │ 进行中             2 │  │     最宽 252px，最高 380px
-│  │ 会话 2        运行中 │  │     列表在坞内滚动
-│  │ 会话 3      等待审批 │  │
+│  ┌──────────────────────┐  │ ← 坞：侧栏底部动作区顶部
+│  │ 进行中             2 │  │    占满一行，排在官方动作之上
+│  │ 会话 2        运行中 │  │    最高 min(46vh, 380px)
+│  │ 会话 3      等待审批 │  │    列表在坞内滚动
 │  └──────────────────────┘  │
+│  [官方底部动作]            │
+│  [设置]                    │
 └────────────────────────────┘
 ```
 
@@ -176,9 +178,10 @@ target: @local/running-sessions-float
 - **坞头**：状态点 + 标题 + 计数。有内容时绿点脉冲（1.8s 循环）；空态灰点静止。
 - **行**：整行是一个按钮。标题单行省略，状态文字不换行、右对齐。
 - **状态色**：运行中用 `--dsw-alias-state-success-primary`；待处理用 `--dsw-alias-state-warn-primary`；其余文字 / 边框 / 背景都走主题 token，明暗主题都跟随。
-- **空态**：`padding: 3px 10px`、圆角 999px、背景 `bg-layer-1`，文字 11px 次级色。
-- **位置**：`position: fixed; left: 10px; bottom: 76px`。252 + 10 = 262，正好落在侧栏最小宽度 264 内；但它是固定定位，不是侧栏的子节点 —— **不跟着侧栏宽度走**。
-- **点击范围**：overlay 层本身 `pointer-events: none`，坞恢复 `auto`；只有坞的矩形会吃掉点击，矩形外的内容照常可点，但被坞盖住的那块点不到。
+- **空态**：不画边框、背景透明，收成 `padding: 2px 6px` 的一行 11px 次级色文字。
+- **位置**：挂在 `sidebar.footer.action` 槽位，`order: -10`，排在所有官方底部动作之前；`width: 100%`，高度由内容决定，最高 `min(46vh, 380px)`。它占真实布局：坞变高时上方会话列表相应变矮，而不是被盖住。
+- **窄栏**：侧栏折叠成 56px 窄栏时，槽位只给 `wide: false`，坞换成 36px 圆点 + 计数的圆片（`rsf-rail`），不摊开列表。
+- **点击范围**：坞是普通文档流元素，没有浮层吃掉点击的问题；坞外的内容照常可点。
 
 ## 它怎么判断「进行中」
 
@@ -221,13 +224,13 @@ running-sessions-float/                 ← 仓库根（不是包）
 ├─ README.md
 ├─ IMPLEMENTATION.md
 ├─ AGENTS.md
-├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（21 项）
+├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（27 项）
 ├─ .agents/index.json                   ← 架构扫描状态：模块清单 / 覆盖率 / 缺口
 └─ running-sessions-float/              ← 包体（安装 target）
    ├─ package.json                      # name / version / exports / files / dsh.bundle + dsh.client
    ├─ cordis.patch.yml                  # insert 一行插件入口
    ├─ index.js                          # Host 半边：export function apply() {}（8 行）
-   ├─ client.js                         # 浏览器半边：CSS + 组件 + slot 注册（318 行）
+   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（368 行）
    ├─ locale/en.json                    # 插件页元数据（meta.title / meta.description）
    ├─ locale/zh.json                    # 同上，中文
    ├─ AGENTS.md                         # 模块级文档（职责 / 接口 / 数据形状 / FAQ）
@@ -239,16 +242,16 @@ running-sessions-float/                 ← 仓库根（不是包）
 | `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
 | `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@local/running-sessions-float` |
 | `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
-| `running-sessions-float/client.js` | 318 | 浏览器半边：样式、组件、locale 注册、`shell.overlay` 注册 |
+| `running-sessions-float/client.js` | 368 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
 | `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
 | `running-sessions-float/icon.svg` | 11 | 插件图标 |
 | `AGENTS.md` | — | 给 agent 的命令、硬约束与改动连带项 |
-| `test/smoke.mjs` | 209 | 无 DOM 组件冒烟 + 包契约（21 项） |
+| `test/smoke.mjs` | 235 | 无 DOM 组件冒烟 + 包契约（27 项） |
 
 ### 两侧注入
 
 - **Host**：无 `inject`。`index.js` 只导出 `apply()`，不依赖任何 Host 服务。
-- **Client**（`client.js` 模块返回）：`inject: ['slots']`；`apply(ctx)` 里 `ctx.get('locale')`、`ctx.get('uiWorkspace')`、`ctx.slots.inject('shell.overlay', ...)`。
+- **Client**（`client.js` 模块返回）：`inject: ['slots']`；`apply(ctx)` 里 `ctx.get('locale')`、`ctx.get('uiWorkspace')`、`ctx.slots.inject('sidebar.footer.action', ...)`。
 - **加载顺序**（`package.json` → `dsh.client.inject`）：`@deepseek-ai/dsh-client-ui-session` —— 它提供 `useSessions` / `useSessionStatus` 这两个全局标准 props，必须排在它之后激活。
 - **启动加载**：`immediately: true`，启动时就加载，不等打开某个面板。
 
@@ -256,11 +259,11 @@ running-sessions-float/                 ← 仓库根（不是包）
 
 | 扩展点 | 类型 | id / 命名空间 | order | priority | patterns | 条件 | 说明 |
 |---|---|---|---:|---|---|---|---|
-| `shell.overlay` | list 槽位 | `running-sessions-float` | 60 | 未设 | 无（该槽没有 patterns） | 无条件 | 唯一 UI 注册；list 槽按 priority → order 升序渲染 |
+| `sidebar.footer.action` | list 槽位 | `running-sessions-float` | -10 | 未设 | 无（该槽没有 patterns） | 无条件 | 唯一 UI 注册；list 槽按 order 升序渲染，负值排在官方动作（默认 0）之前 |
 | locale | 字典命名空间 | `local.runningSessions` | — | — | — | locale 服务存在时 | 注册 en / zh 各 7 个 key；不在时用内置中文 |
 | `uiWorkspace` | 可选服务 | — | — | — | — | 存在时 | 点击行时调用 `openSession`；缺失则点击无动作 |
 
-不占 `sidebar` / `sidebar.workspaces.*` / `composer.*` 等其它槽位；`shell.overlay` 是本插件唯一的 UI 注册。
+不占 `sidebar` / `sidebar.workspaces.*` / `composer.*` 等其它槽位；`sidebar.footer.action` 是本插件唯一的 UI 注册。
 
 ## 安全模型
 
@@ -288,7 +291,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 点行没反应 | 部署里没有 `uiWorkspace`（无工作区 UI），或会话已删 | 属于降级行为；换有工作区的部署 |
 | 改了 `client.js` 没变化 | 装的是副本，或部署没挂 `client-hmr` | `link:` 装等推送，没挂就重启 Harness；副本重新安装 |
 | 文案不跟随界面语言 | locale 服务不可用，回落中文 | 检查界面语言设置；locale 服务由官方加载 |
-| 坞盖住列表靠下的行 | 固定定位，浮在列表上方 | 已知边界；把列表往上滚，避开被盖住的行 |
+| 坞把上方会话列表挤短了 | 坞在底部动作区里占的是真实布局，不是浮层 | 预期行为：坞展开时列表相应变短；行多时坞内滚动，最高 380px |
 | 卸载后仍被装配 | 只跑了 `pnpm remove`，没取消 bundle 选中 | 从插件页卸载，或用 `plugin_manager` 的 `remove_bundle`（先取消选中再删包） |
 | 按 `#0.1` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.1`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
 | 坞里的行数比侧栏会话少 | 空白会话与 subagent 会话被刻意过滤 | 预期行为；去侧栏对应工作区看它们 |
@@ -314,26 +317,27 @@ console.log(pkg.dsh.bundle.patch, pkg.dsh.client.inject);
 # 预期：@local/running-sessions-float 0.1.0
 #       ./cordis.patch.yml [ '@deepseek-ai/dsh-client-ui-session' ]
 
-# 3) 组件行为 + 包契约（无 DOM，21 项）
+# 3) 组件行为 + 包契约（无 DOM，27 项）
 node test/smoke.mjs
-# 预期：21 行 PASS + ALL PASS
+# 预期：27 行 PASS + ALL PASS
 ```
 
-`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **15 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册；另加 **6 项包契约**：client id 与包名一致、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。15 + 6 = 21，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
+`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **19 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数）、CSS 里没有 `position: fixed`（坞不再浮层）；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。19 + 8 = 27，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
 
 ### 只能在浏览器里看的（逐条打勾）
 
-- [ ] 左下角出现坞；有进行中会话时标题「进行中」，右侧有数字徽标。
+- [ ] 侧栏底部、设置行上方出现坞；有进行中会话时标题「进行中」，右侧有数字徽标。
 - [ ] 行按最近更新时间排，刚发过消息的在最上面。
 - [ ] 行标题过长显示省略号，不换行、不撑宽坞。
 - [ ] 运行中行尾是绿色「运行中」；待处理是橙色。
 - [ ] 点一行，主视图切到该会话；悬停提示「打开这个会话 — 标题」。
-- [ ] 没有进行中会话时收成细条，文字「暂无进行中」，点为灰色且不动。
+- [ ] 没有进行中会话时收成一行细字，文字「暂无进行中」，点为灰色且不动，没有边框。
 - [ ] 切换界面语言（中 / 英）：标题、状态、空态文案都跟着变。
 - [ ] 切明暗主题：边框、背景、文字都跟随，没有写死颜色。
 - [ ] Tab 能聚焦到行，聚焦时有品牌色描边，Enter / Space 能打开。
-- [ ] 侧栏拖宽 / 收窄：坞位置不变（固定 10px / 76px）—— 这是预期。
-- [ ] 侧栏折叠：坞仍留在最左侧，会盖到主内容上 —— 已知边界，不是故障。
+- [ ] 侧栏拖宽 / 收窄：坞跟着侧栏宽度走（`width: 100%`），不再固定 252px。
+- [ ] 坞展开时上方列表相应变短，没有被坞盖住、点不到的行。
+- [ ] 侧栏折叠成 56px 窄栏：坞变成 36px 圆点 + 计数，不摊开列表、不压主内容。
 - [ ] 让一个会话停在审批 / 计划审阅 / 提问上：行尾分别显示「等待审批 / 计划待审 / 等待回答」。
 - [ ] 新建一个空白会话（不发消息）：它不出现在坞里。
 - [ ] 启动一个 subagent：它不出现在坞里。
@@ -343,8 +347,10 @@ node test/smoke.mjs
 
 每条都带原因与代价；没解决之前不要从文档里删。
 
-- **固定定位，不跟侧栏走**：`left: 10px; bottom: 76px` 是写死的。代价：侧栏折叠（Web 下窄到 56px，桌面端为 0）时坞会压在主内容左下角；侧栏拉宽到 420px 时坞仍只占左边 262px。官方若改侧栏底部高度或最小宽度，需要同步改 CSS。
-- **盖住列表下半段**：坞是浮层，占的是列表靠下的一块（底边距视口 76px，最高 380px）。代价：会话多、坞展开时，靠下的几行被完全盖住，要把列表往上滚才能点到。空态细条把这块压到最小。
+- **坞在侧栏最底部，只看得见「进行中」的一屏**：坞最高 `min(46vh, 380px)`，行再多要在坞内滚动。代价：会话特别多时，坞和上方列表抢高度 —— 这是「不遮挡」换来的（浮层不占高度，但会盖住行）。
+- **窄栏只剩计数**：折叠成 56px 窄栏时只有圆点 + 数字，看不到标题、也点不开行。代价：想看列表得先展开侧栏。
+- **靠负 `order` 抢位**：`order: -10` 保证坞排在官方底部动作（默认 0）之前。代价：官方若也发负 order，顺序会变；这是槽位顺序契约，不是坞能单方面决定的。
+- **`div:has(> [data-slot=...] > .rsf-dock)` 改宿主布局**：宿主给的槽位内容是 `display: contents` 锚点，本身没有「独占一行」的契约；这条规则把底部动作行改成列。代价：宿主改这个 `data-slot` 锚点、或不再用这一层容器时，坞会和官方动作挤在同一行，需要回来改选择器。
 - **只做导航**：点行只切换会话，不能停止运行、不能回答提问 / 审批。那些动作在官方浮层里；坞刻意不复制第二套交互。
 - **不显示「完成未读」**：`completionUnread` 字段没有用上。代价：会话刚跑完就从坞里消失，错过「刚结束」的提醒 —— 那是官方侧栏的职责。
 - **不显示 subagent**：`origin === 'subagent'` 被过滤。代价：子代理在跑什么，得进主会话看；换来的是一个任务不会在坞里裂成多行。
@@ -360,11 +366,11 @@ node test/smoke.mjs
 | 文件 | 关系 |
 |---|---|
 | [README.md](README.md) | 本文件：怎么装、怎么用、怎么排错、怎么验证 |
-| [IMPLEMENTATION.md](IMPLEMENTATION.md) | 为什么这么实现：overlay 取舍、过滤规则、空态、locale 降级、生效路径 |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | 为什么这么实现：槽位取舍、过滤规则、空态、locale 降级、生效路径 |
 | [AGENTS.md](AGENTS.md) | 给 agent 的：命令、硬约束、改动连带项 |
 | [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) | 给 agent 的模块级细节：职责、接口契约、数据形状、FAQ |
 | [client.js](running-sessions-float/client.js) | 浏览器半边：样式、组件、slot 注册 |
 | [index.js](running-sessions-float/index.js) | Host 半边（空 `apply()`） |
 | [package.json](running-sessions-float/package.json) | 包声明：bundle patch + client 声明 |
 | [cordis.patch.yml](running-sessions-float/cordis.patch.yml) | 装配行 |
-| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（21 项） |
+| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（27 项） |

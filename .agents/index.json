@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T10:44:32+0800",
+  "generatedAt": "2026-10-20T14:05:00+0800",
   "generator": "init-architect",
   "root": {
     "name": "running-sessions-float",
@@ -31,13 +31,13 @@
     {
       "name": "running-sessions-float",
       "path": "running-sessions-float/",
-      "role": "可安装插件包：Host 半边为空，浏览器半边在 shell.overlay 注册「进行中」会话坞",
+      "role": "可安装插件包：Host 半边为空，浏览器半边在 sidebar.footer.action 注册「进行中」会话坞（正常流，不浮层）",
       "language": "JavaScript (ESM) + CSS",
       "entry": ["running-sessions-float/index.js", "running-sessions-float/client.js"],
       "interfaces": [
-        "slot shell.overlay: id=running-sessions-float, order=60, no patterns",
+        "slot sidebar.footer.action: id=running-sessions-float, order=-10, scope=root, no patterns, owner props { wide }",
         "locale namespace local.runningSessions (en/zh, 7 keys each)",
-        "inject face { locale, openSession }",
+        "inject face { locale, openSession }; owner props { wide } → wide=false 渲染 36px 计数圆片",
         "data in: useSessions / useSessionStatus slot props",
         "side effect out: uiWorkspace.openSession(id)"
       ],
@@ -49,7 +49,7 @@
       ],
       "tests": ["test/smoke.mjs"],
       "importantPaths": [
-        "running-sessions-float/client.js (318 lines: DICTS/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
+        "running-sessions-float/client.js (368 lines: DICTS/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
         "running-sessions-float/index.js (8 lines: empty apply)",
         "running-sessions-float/package.json",
         "running-sessions-float/cordis.patch.yml"
@@ -69,18 +69,18 @@
     {
       "name": "test",
       "path": "test/",
-      "role": "无 DOM 冒烟 + 包契约：vm 加载 client.js，React 桩渲染，断言 15 项行为 + 6 项契约",
+      "role": "无 DOM 冒烟 + 包契约：vm 加载 client.js，React 桩渲染，断言 19 项行为 + 8 项契约",
       "language": "JavaScript (ESM, node:test-free, zero dependency)",
       "entry": ["test/smoke.mjs"],
-      "interfaces": ["CLI: node test/smoke.mjs (exit 0 = ALL PASS, 21 checks)"],
+      "interfaces": ["CLI: node test/smoke.mjs (exit 0 = ALL PASS, 27 checks)"],
       "config": [],
       "tests": ["test/smoke.mjs"],
-      "importantPaths": ["test/smoke.mjs (209 lines)"],
+      "importantPaths": ["test/smoke.mjs (235 lines)"],
       "doc": "AGENTS.md#验证规范 (no dedicated module doc by design)",
       "scannedFiles": ["test/smoke.mjs"],
       "pathOnlyFiles": [],
       "gaps": [
-        "无独立模块文档（有意并入根 AGENTS.md「验证规范」与插件包文档「测试与质量」，避免与 21 项断言重复）"
+        "无独立模块文档（有意并入根 AGENTS.md「验证规范」与插件包文档「测试与质量」，避免与 27 项断言重复）"
       ]
     }
   ],
@@ -103,7 +103,7 @@
     ]
   },
   "gaps": [
-    "浏览器端视觉/交互（固定定位、遮挡、主题跟随、悬停提示、中英切换）没有自动断言，只能在浏览器按 README 清单人工核",
+    "浏览器端视觉/交互（槽位内位置、坞变高时列表变短、窄栏圆片、主题跟随、悬停提示、中英切换）没有自动断言，只能在浏览器按 README 清单人工核",
     "未核对已安装 profile 的实际装配状态：workspace-write 沙箱内 dsh --dump-config 会写 profile 根文件（EROFS），属环境限制而非文档缺口",
     "test/ 无独立模块文档（有意）：断言细节以 test/smoke.mjs 与其覆盖表为准"
   ],

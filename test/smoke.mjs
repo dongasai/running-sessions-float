@@ -116,13 +116,24 @@ const render = (component, sessions, statuses, options = {}) => component({
   useSessionStatus: (select) => select(statuses),
   openSession: options.openSession,
   locale: options.locale,
+  wide: options.wide,
 });
 
-/** Flatten the stub element tree into sections, buttons, and text. */
+/** Collect every string below one stub element. */
+function textOf(node) {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  if (!node || typeof node !== 'object') return '';
+  return textOf(node.props?.children);
+}
+
+/** Flatten the stub element tree into sections, buttons, rails, styles, text. */
 function inspect(tree) {
   const texts = [];
   const sections = [];
   const buttons = [];
+  const rails = [];
+  const styles = [];
   const walk = (node) => {
     if (node === null || node === undefined || node === false) return;
     if (typeof node === 'string') { texts.push(node); return; }
@@ -130,6 +141,8 @@ function inspect(tree) {
     if (typeof node !== 'object') return;
     if (node.type === 'section') sections.push(node);
     if (node.type === 'button') buttons.push(node);
+    if (node.type === 'style') styles.push(node);
+    if (String(node.props?.className || '').split(/\s+/).includes('rsf-rail')) rails.push(node);
     walk(node.props?.children);
   };
   walk(tree);
@@ -144,13 +157,16 @@ function inspect(tree) {
       onClick: button.props.onClick,
     };
   });
-  return { texts, sections, rows };
+  return { texts, sections, rows, rails, styles };
 }
 
 const view = inspect(render(component, listState, statusState, { openSession: (id) => openedIds.push(id) }));
 const empty = inspect(render(component, { ids: ['idle'], byId: { idle: listState.byId.idle } }, new Map()));
 const fallback = inspect(render(component, { ids: [], byId: {} }, new Map(), { locale: undefined }));
 const noOp = inspect(render(component, listState, statusState, { openSession: undefined }));
+const rail = inspect(render(component, listState, statusState, { wide: false }));
+const railEmpty = inspect(render(component, { ids: ['idle'], byId: { idle: listState.byId.idle } }, new Map(), { wide: false }));
+const css = view.styles[0]?.props?.dangerouslySetInnerHTML?.__html || '';
 
 let failures = 0;
 const check = (name, pass) => {
@@ -182,6 +198,14 @@ try {
   threw = true;
 }
 check('missing openSession degrades to a no-op', threw === false);
+check('rail mode renders a chip, not the list',
+  rail.rails.length === 1 && rail.sections.length === 0 && rail.rows.length === 0);
+check('rail chip carries the count',
+  rail.rails[0]?.props?.['aria-label'] === '进行中 · 5' && textOf(rail.rails[0]) === '5');
+check('rail chip with nothing running has no count',
+  railEmpty.rails[0]?.props?.className === 'rsf-rail rsf-idle' && textOf(railEmpty.rails[0]) === '');
+check('dock CSS is in normal flow, not a fixed overlay',
+  !/position:\s*fixed/.test(css) && css.includes('data-slot="sidebar.footer.action"'));
 
 check('en dictionary registered', locale.registered?.dicts?.en?.title === 'In progress');
 
@@ -194,6 +218,8 @@ const dicts = locale.registered?.dicts ?? {};
 const zhKeys = Object.keys(dicts.zh ?? {}).sort();
 const enKeys = Object.keys(dicts.en ?? {}).sort();
 check('client id matches package name', clientId === pkg.name);
+check('slot is the sidebar foot action slot', registered.spec.name === 'sidebar.footer.action');
+check('order places the dock above official footer actions', registered.spec.order < 0);
 check('patch inserts this bundle',
   patchText.includes(`id: running-sessions-float`) && patchText.includes(`name: '${pkg.name}'`));
 check('files list ships the runtime files',

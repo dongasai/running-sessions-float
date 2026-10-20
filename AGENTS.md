@@ -14,6 +14,7 @@
 | 2026-10-20 | README 对齐 `note/readme-spec.md`：补「不提供」清单、装法四条坑（含 tag 钉版本与 git 直装限制）、`--dump-config` 期望输出、扩展点表的 priority / patterns 列与「不占槽位」、排错补到 12 行、验证拆分写明 15 + 6 = 21。 |
 | 2026-10-20 | README 安装章节按 `readme-spec` §2.3 重写：Web / git 源（本仓库不可用）/ link 三法 + 让 Agent 装；钉版本改为「克隆 + checkout tag」；装完确认给本机实测的 `--dump-config` 三行输出；四条坑含「清空 bundles 后装配为空」的实测证据；删掉「确认它真的在工作」里重复的装配块，改为指回本章。 |
 | 2026-10-20 | 修正上述安装章节：方式二上一版抄漏了 `git+https://` 写法与 `# 或`、`# 钉版本` 三条命令的原有格式；现按 `readme-spec` 原样补齐，并把三条命令的实际结果（依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，随后 `cannot resolve profile bundle`）写在命令下方。 |
+| 2026-10-20 | 位置修正：坞从 `shell.overlay` 的固定浮层（`left: 10px / bottom: 76px`，会盖住列表）迁到官方 `sidebar.footer.action` 槽位、`order: -10`，成为侧栏底部动作区顶部的一块正常流；56px 窄栏改渲染 36px 计数圆片。同步 `client.js`、smoke（21 → 27 项）、README、IMPLEMENTATION、两份 AGENTS、`.agents/index.json` 与 locale meta。 |
 
 ## 项目是什么
 
@@ -21,9 +22,9 @@
 
 - **Host 半边 [index.js](running-sessions-float/index.js)**：只有一个空 `apply()`，只给 bundle 一个挂载入口；
   无工具、无路由、无状态、无配置。
-- **浏览器半边 [client.js](running-sessions-float/client.js)**：在 `shell.overlay` 注册一个固定定位的
-  「进行中」坞，读标准 Hook `useSessions` / `useSessionStatus`，筛出 running / pending 的会话，
-  点击走 `uiWorkspace.openSession`。
+- **浏览器半边 [client.js](running-sessions-float/client.js)**：在 `sidebar.footer.action` 注册一个
+  「进行中」坞（侧栏底部动作区顶部，正常流，不浮层），读标准 Hook `useSessions` / `useSessionStatus`，
+  筛出 running / pending 的会话，点击走 `uiWorkspace.openSession`。
 
 它不新增数据源、不轮询、不落盘、不改会话；样式与文案都在 `client.js` 里，无构建、无依赖。
 
@@ -32,7 +33,7 @@
 | 目的 | 命令 |
 |---|---|
 | 语法自检（两半） | `node --check running-sessions-float/index.js && node --check running-sessions-float/client.js` |
-| 冒烟 + 包契约（21 项，先跑这个） | `node test/smoke.mjs` |
+| 冒烟 + 包契约（27 项，先跑这个） | `node test/smoke.mjs` |
 | 校验 manifest | `node -e 'const p=require("./running-sessions-float/package.json");console.log(p.name,p.version,p.dsh)'` |
 | 校验 patch | `python3 -c "import yaml;print(yaml.safe_load(open('running-sessions-float/cordis.patch.yml')))"` |
 | 装进 profile（宿主 shell） | `dsh plugin --profile web add "link:$(realpath running-sessions-float)"` |
@@ -64,7 +65,7 @@ graph TD
     B --> E["client.js<br/>浏览器半边"]
     B --> F["package.json + cordis.patch.yml<br/>装配声明"]
     B --> G["locale/*.json<br/>插件页 meta"]
-    E --> H["shell.overlay 会话坞"]
+    E --> H["sidebar.footer.action 会话坞"]
 
     click B "./running-sessions-float/AGENTS.md" "查看插件包模块文档"
 ```
@@ -74,20 +75,20 @@ graph TD
 | 模块 | 路径 | 职责 | 入口 | 文档 |
 |---|---|---|---|---|
 | 插件包 | `running-sessions-float/` | 可安装单元：Host 空、浏览器半边注册坞 | `index.js` / `client.js` | [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) |
-| 测试 | `test/` | 组件行为 + manifest / patch / 字典契约（21 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
+| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（27 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
 
 模块候选只有这两个：仓库根是文档编排层，没有 `package.json`，不能单独安装。
 
 ## 文件地图
 
 ```text
-client.js        浏览器半边（318 行）：DICTS / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
+client.js        浏览器半边（368 行）：DICTS / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
 index.js         Host 半边：8 行，空 apply()
 cordis.patch.yml insert id=running-sessions-float → @local/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
 AGENTS.md（包内）模块级文档：职责 / 接口 / 数据形状 / FAQ（不进 npm files 白名单）
-test/smoke.mjs   vm + React 桩渲染 + 包契约，21 项
+test/smoke.mjs   vm + React 桩渲染 + 包契约，27 项
 .agents/index.json 扫描状态：模块清单 / 覆盖率 / 缺口 / 续扫入口
 README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```
@@ -96,7 +97,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 
 - 2 空格缩进、单引号、语句带分号；`client.js` 用 `React.createElement`（`h`），不写 JSX。
 - CSS 类前缀 `rsf-`；颜色 / 边框 / 背景只用主题 token；阴影是固定 alpha。
-- 中文 JSDoc；注释解释**为什么**（尤其过滤、待处理优先级、固定定位），不解释语法。
+- 中文 JSDoc；注释解释**为什么**（尤其过滤、待处理优先级、为什么不再用固定定位），不解释语法。
 - 可见文案进 `DICTS`，不要在属性或子元素里写死中文。
 
 ## 硬约束（违反即出 bug）
@@ -112,13 +113,15 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 4. **过滤与优先级是契约**：`blank` 与 `origin === 'subagent'` 不进坞；有 `pendingInteraction` 的行
    **优先显示待处理**（即使 running 为真）；排序只看 `updatedAt` 降序。改任何一条同时改
    `test/smoke.mjs`、README「它怎么判断」与 IMPLEMENTATION「过滤规则」。
-5. **slot 契约**：`shell.overlay` 是 list 槽，id `running-sessions-float`、order 60；该槽没有 patterns。
-   注册必须走 `ctx.slots.inject('shell.overlay', () => ctx.slots.register(...))`，等槽位存在再注册。
+5. **slot 契约**：`sidebar.footer.action` 是 list 槽（`scope: root`，owner props 只有 `wide`），id
+   `running-sessions-float`、order `-10`（负值才排在官方动作之前）；该槽没有 patterns。注册必须走
+   `ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(...))`，等槽位存在再注册。
+   坞**必须是文档流里的块**：不要改回 `position: fixed` / `shell.overlay`，那会重新盖住会话列表。
 6. **locale 两层**：界面文案只在 `client.js` 的 `DICTS`（zh / en 键必须完全一致，每个 `t('key')`
    两本都要有）；`locale/*.json` 只放插件页 `meta`。`test/smoke.mjs` 会双向查这两条。
 7. **Host 半边保持空**：不要为了「方便」加工具 / 路由 / 状态。那会把纯客户端插件变成 Host 插件，
    生效条件、权限、验证与文档全要重写。
-8. **样式只用主题 token**（`--dsw-alias-*`），不写死品牌色；现有唯一的硬编码是两层黑色阴影 alpha。
+8. **样式只用主题 token**（`--dsw-alias-*`），不写死品牌色；坞在正常流里，已经没有硬编码的坐标与阴影。
    不 import 官方 client 包（如 primitives），控件按宿主样式手写。
 9. **无构建、无依赖、无 JSX**：`client.js` 是手写 ESM bundle，用 `React.createElement`（`h`）。
 10. **安装 target 必须指到 `running-sessions-float/` 子目录**（仓库根没有 `package.json`）；不要手写
@@ -126,10 +129,12 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 
 ## 已知设计（不是 bug）
 
-- 固定 `left: 10px / bottom: 76px`，不随侧栏宽度 / 折叠移动，会盖住列表下半段 —— 取舍见 [IMPLEMENTATION.md](IMPLEMENTATION.md)。
+- 坞挂在侧栏底部动作区（`order: -10`），靠 `div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock)`
+  把宿主那一行 flex 改成列 —— 宿主改锚点时要跟着改；取舍见 [IMPLEMENTATION.md](IMPLEMENTATION.md)。
+- 56px 窄栏只剩 36px 计数圆片：看不到标题、也点不开行 —— 侧栏展开才看列表。
 - 空白会话与 subagent 会话不显示 —— 过滤是刻意的。
 - 未知 `pendingInteraction.kind` 落到「等待回答」—— 归类兜底，不是漏了某个分支。
-- 空态仍留一条细条 —— 保留固定座位，避免整块消失。
+- 空态仍留一行无边框细字 —— 保留固定座位，避免整块消失。
 - 没有设置项 / 开关 / 快捷键 —— 装了就一直在，不想看只能卸载。
 
 ## 验证规范
@@ -139,7 +144,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs   # 21 项，必须 ALL PASS
+node test/smoke.mjs   # 27 项，必须 ALL PASS
 ```
 
 命令行证明不了的部分（位置、遮挡、主题、悬停、语言切换）照 README 的浏览器打勾清单人工核；
@@ -155,7 +160,7 @@ node test/smoke.mjs   # 21 项，必须 ALL PASS
 | 动了什么 | 必须同时改 |
 |---|---|
 | `client.js` 的过滤 / 排序 / 文案 / 状态归类 | `test/smoke.mjs` 断言、README「功能列表」「它怎么判断」「排错」、IMPLEMENTATION 对应节 |
-| slot id / order / 注册方式 | README「扩展点占用表」、IMPLEMENTATION「注册时序」 |
+| slot id / order / 注册方式 | README「扩展点占用表」「界面长什么样」、IMPLEMENTATION「注册时序」「为什么注册 sidebar.footer.action」、本文件约束 5 |
 | 新增 / 删除可见文案 | `DICTS` 的 zh 与 en 两份（键数必须相等）、README 功能表（如有新状态） |
 | 行数 / 版本 | README「结构」表与「怎么验证」输出、`package.json`；发版三处一起动（version、tag、README 版本行）。未发版期间允许无 tag，但 README 必须写明「尚未打 git tag」 |
 | `package.json` 的 `dsh.client` / `dsh.bundle` | README「生效条件」「结构」、本文件命令与生效表 |
