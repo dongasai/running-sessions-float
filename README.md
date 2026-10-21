@@ -1,10 +1,10 @@
 # @local/running-sessions-float
 
-在 DSH Web GUI 左侧栏底部的动作区里放一块「进行中」坞：把**正在跑**和**卡在等你处理**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一行细字，只留「暂无进行中」。坞是布局里的真实一块，排在这排动作的最上面，**不浮在会话列表上**。
+在 DSH Web GUI 左侧栏底部的动作区里放一块「进行中」坞：把**正在跑**、**卡在等你处理**和**刚跑完还没看过**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一行细字，只留「暂无进行中」。坞是布局里的真实一块，排在这排动作的最上面，**不浮在会话列表上**。
 
 官方侧栏本来就会在会话行上标运行状态点（`StateDot`）和待处理状态，但那些行分散在各个工作区分组里 —— 组一折叠就看不见，要判断「现在有几个会话在等我」得逐个展开找。
 
-这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running 或 pending 的会话，按最近更新时间排，固定在侧栏底部动作区。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
+这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running、pending 或 `completionUnread` 的会话，按最近更新时间排，固定在侧栏底部动作区。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
 
 | 想知道 | 看 |
 |---|---|
@@ -20,8 +20,10 @@
 |---|---|
 | 进行中聚合 | `running === true` 的会话进坞，行尾「运行中」 |
 | 待处理聚合 | 有 `pendingInteraction` 的会话进坞，按类型显示「等待审批 / 计划待审 / 等待回答」；待处理优先于运行中 |
+| 完成未读聚合 | `completionUnread === true`（主视图之外停了运行、结果还没看过）的会话进坞，行尾灰字「已完成」；打开该会话后官方清掉这个标记，行随之消失 |
 | 一键切换 | 点行调用 `uiWorkspace.openSession`，主视图切到该会话 |
 | 计数徽标 | 坞头右侧显示当前行数 |
+| 头部状态点 | 只要还有会话在跑或在等你处理，绿点就脉冲；只剩「已完成」提醒时切成静止的 6px 成功色圆点，不再假装有任务在跑 |
 | 空态细行 | 无进行中会话时收成一行无边框细字，灰点静止，不显示计数 |
 | 中英双语 | 内置 zh / en 两套文案，跟随界面语言；locale 服务缺失时回落中文 |
 | 仅 Web 客户端 | `dsh.client.platform: web`；headless 等没有 Web 客户端的 profile 不加载它 |
@@ -125,7 +127,7 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 
 装完等一两秒 —— 客户端半边在启动时加载，Web 组合会通过 `client-hmr` 把新模块推给页面；没出现就刷新一次页面。侧栏底部、设置行上方出现坞：
 
-1. 有进行中 / 待处理会话时，坞头是「进行中」+ 计数徽标，下面一行一个会话：左边标题、右边状态。
+1. 有进行中 / 待处理 / 刚跑完未读的会话时，坞头是「进行中」+ 计数徽标，下面一行一个会话：左边标题、右边状态。
 2. 行按会话的 `updatedAt` **从新到旧**排；刚发过消息的会话在最上面。
 3. **点一行**：主视图切到那个会话（不是开新页签）。悬停有提示「打开这个会话 — 标题」。
 4. 没有这样的会话时：坞收成一行无边框细字，文字「暂无进行中」，绿点变灰点、停止脉冲。
@@ -138,7 +140,9 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 - 在另一个会话发一条要跑一会儿的消息，回到当前会话：坞里应多出一行「运行中」，计数 +1。
 - 点那一行：主视图切过去。
 - 让某个会话卡在审批上（例如让它执行一条需要确认的命令）：行尾应变成「等待审批」。
-- 把所有会话停下来：坞应收成一行「暂无进行中」细字。
+- 让一个会话在你的**另一个页签 / 主视图之外**跑完：它的行尾应变成灰字「已完成」，而且不会从坞里掉出去。
+- 点那行「已完成」进去看一眼再回来：官方清掉 `completionUnread`，这行应当消失。
+- 把所有会话停下来且都看过：坞应收成一行「暂无进行中」细字。
 
 看不到坞时按「排错」表逐条对。
 
@@ -165,9 +169,10 @@ target: @local/running-sessions-float
 │  · 会话 3                  │
 │                            │
 │  ┌──────────────────────┐  │ ← 坞：侧栏底部动作区顶部
-│  │ 进行中             2 │  │    独占一行，排在官方动作之上
+│  │ 进行中             3 │  │    独占一行，排在官方动作之上
 │  │ 会话 2        运行中 │  │    最高 min(28vh, 200px)
 │  │ 会话 3      等待审批 │  │    列表在坞内滚动
+│  │ 会话 1        已完成 │  │    跑完但还没看过的也在这里
 │  └──────────────────────┘  │
 │  用量统计                  │ ← 原有入口照旧，排在坞下面
 │  会话管理                  │
@@ -177,9 +182,9 @@ target: @local/running-sessions-float
 
 逐块说明：
 
-- **坞头**：状态点 + 标题 + 计数。有内容时绿点脉冲（1.8s 循环）；空态灰点静止。
+- **坞头**：状态点 + 标题 + 计数。只要还有会话在跑或在等你处理，绿点就脉冲（1.8s 循环）；只剩「已完成」提醒时换成 6px 静止成功色圆点；空态灰点静止。
 - **行**：整行是一个按钮。标题单行省略，状态文字不换行、右对齐。
-- **状态色**：运行中用 `--dsw-alias-state-success-primary`；待处理用 `--dsw-alias-state-warn-primary`；其余文字 / 边框 / 背景都走主题 token，明暗主题都跟随。
+- **状态色**：运行中用 `--dsw-alias-state-success-primary`；待处理用 `--dsw-alias-state-warn-primary`；已完成用次级文字色 `--dsw-alias-label-tertiary`（它是提醒，不是告警，不抢眼）；其余文字 / 边框 / 背景都走主题 token，明暗主题都跟随。
 - **空态**：不画边框、背景透明，收成 `padding: 2px 6px` 的一行 11px 次级色文字。
 - **位置**：挂在 `sidebar.footer.action` 槽位，`order: -10`，排在所有官方底部动作之前；`width: 100%`，高度由内容决定，最高 `min(28vh, 200px)`。它占真实布局：坞变高时上方会话列表相应变矮，而不是被盖住。
 - **独占一行**：宿主把这一行排成**不换行**的 `flex-direction: row`，而这条生态里的底部入口（用量统计 / 会话管理 / 搜索）都写着 `flex: 0 0 100%`，意思都是「我要占满一整行」。不换行时第一个就把别人挤出可视区。坞挂载时给那一行加 `flex-wrap: wrap`（`promoteFooterContainer`，另有一条等价 `:has()` 规则管首帧），于是每个入口各占一行、都在坞下面。
@@ -193,13 +198,17 @@ target: @local/running-sessions-float
 
 | 条件 | 是否进坞 | 行尾状态 |
 |---|---|---|
-| 有 `pendingInteraction` | 是 | 按 kind 归类（见下表），优先于运行中 |
+| 有 `pendingInteraction` | 是 | 按 kind 归类（见下表），优先于运行中与已完成 |
 | `running === true` 且无待处理 | 是 | 运行中 |
+| `completionUnread === true` 且已停下 | 是 | 已完成（灰字） |
 | `blank === true`（新建但还没发消息） | 否 | — |
 | `origin === 'subagent'` | 否 | — |
-| 其余空闲会话 | 否 | — |
+| 其余空闲会话（含已看过结果的结束会话） | 否 | — |
+
+三个保留条件之间是**并集**，显示优先级是 待处理 > 运行中 > 已完成：一个会话既在跑又有待审批时显示「等待审批」，刚跑完但还没看过时显示「已完成」。
 
 - `running` 优先取状态快照；状态里没有这个字段（或没有该会话的状态）时，退回列表快照的 `summary.running`。
+- `completionUnread` 只从状态快照读，缺字段就当作「已读过」：列表快照里没有对应事实，猜一个会让坞凭空多出一行「已完成」。官方在主视图里停下运行时不会置这个标记，所以坞里出现的每一条「已完成」都是你没在当前视图里看过的。
 - `kind` 是各域自己定的字符串，插件只做**大小写无关的包含匹配**：
 
 | kind 实际值 | 坞里显示 |
@@ -228,13 +237,13 @@ running-sessions-float/                 ← 仓库根（不是包）
 ├─ README.md
 ├─ IMPLEMENTATION.md
 ├─ AGENTS.md
-├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（31 项）
+├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（38 项）
 ├─ .agents/index.json                   ← 架构扫描状态：模块清单 / 覆盖率 / 缺口
 └─ running-sessions-float/              ← 包体（安装 target）
    ├─ package.json                      # name / version / exports / files / dsh.bundle + dsh.client
    ├─ cordis.patch.yml                  # insert 一行插件入口
    ├─ index.js                          # Host 半边：export function apply() {}（8 行）
-   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（429 行）
+   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（465 行）
    ├─ locale/en.json                    # 插件页元数据（meta.title / meta.description）
    ├─ locale/zh.json                    # 同上，中文
    ├─ AGENTS.md                         # 模块级文档（职责 / 接口 / 数据形状 / FAQ）
@@ -246,11 +255,11 @@ running-sessions-float/                 ← 仓库根（不是包）
 | `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
 | `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@local/running-sessions-float` |
 | `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
-| `running-sessions-float/client.js` | 429 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
+| `running-sessions-float/client.js` | 465 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
 | `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
 | `running-sessions-float/icon.svg` | 11 | 插件图标 |
 | `AGENTS.md` | — | 给 agent 的命令、硬约束与改动连带项 |
-| `test/smoke.mjs` | 264 | 无 DOM 组件冒烟 + 包契约（31 项） |
+| `test/smoke.mjs` | 287 | 无 DOM 组件冒烟 + 包契约（38 项） |
 
 ### 两侧注入
 
@@ -264,7 +273,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 扩展点 | 类型 | id / 命名空间 | order | priority | patterns | 条件 | 说明 |
 |---|---|---|---:|---|---|---|---|
 | `sidebar.footer.action` | list 槽位 | `running-sessions-float` | -10 | 未设 | 无（该槽没有 patterns） | 无条件 | 唯一 UI 注册；list 槽按 order 升序渲染，负值排在官方动作（默认 0）之前 |
-| locale | 字典命名空间 | `local.runningSessions` | — | — | — | locale 服务存在时 | 注册 en / zh 各 7 个 key；不在时用内置中文 |
+| locale | 字典命名空间 | `local.runningSessions` | — | — | — | locale 服务存在时 | 注册 en / zh 各 8 个 key（`title` `running` `approval` `plan` `answer` `done` `empty` `openHint`）；不在时用内置中文 |
 | `uiWorkspace` | 可选服务 | — | — | — | — | 存在时 | 点击行时调用 `openSession`；缺失则点击无动作 |
 
 不占 `sidebar` / `sidebar.workspaces.*` / `composer.*` 等其它槽位；`sidebar.footer.action` 是本插件唯一的 UI 注册。
@@ -291,7 +300,9 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 插件页装不上，报 `not-bundle` 或找不到 manifest | target 指到仓库根 | 指到 `running-sessions-float/running-sessions-float` |
 | 装完界面没变化 | 只装没启用 / profile 启动时装配 | 插件页点「立即启用」；`application: restart-required` 时重启 Harness |
 | 坞没出现，插件却是启用状态 | 页面还是旧模块代次 / 推送还没到 | 等一两秒；刷新页面；仍无则重启 Harness（无 `client-hmr` 的部署） |
-| 坞一直「暂无进行中」 | 没有 running / pending 的会话；或它们都是空白 / subagent 会话（被过滤） | 去另一个会话发一条消息；确认不是刚建的空会话 |
+| 坞一直「暂无进行中」 | 没有 running / pending / 完成未读的会话；或它们都是空白 / subagent 会话（被过滤） | 去另一个会话发一条消息；确认不是刚建的空会话 |
+| 会话跑完了坞里却没有「已完成」行 | 那个会话当时是主视图（官方会把 `completionUnread` 清掉），或它已归档 / 被删 | 属预期：主视图里跑完不算「未读」 |
+| 「已完成」行点了也不消失 | 点击只切视图，官方在会话成为主视图后才清标记；状态快照可能滞后一拍 | 等一拍；仍不消失就刷新页面确认是不是旧 bundle |
 | 点行没反应 | 部署里没有 `uiWorkspace`（无工作区 UI），或会话已删 | 属于降级行为；换有工作区的部署 |
 | 改了 `client.js` 没变化 | 装的是副本，或部署没挂 `client-hmr` | `link:` 装等推送，没挂就重启 Harness；副本重新安装 |
 | 文案不跟随界面语言 | locale 服务不可用，回落中文 | 检查界面语言设置；locale 服务由官方加载 |
@@ -322,18 +333,19 @@ console.log(pkg.dsh.bundle.patch, pkg.dsh.client.inject);
 # 预期：@local/running-sessions-float 0.1.0
 #       ./cordis.patch.yml [ '@deepseek-ai/dsh-client-ui-session' ]
 
-# 3) 组件行为 + 包契约（无 DOM，31 项）
+# 3) 组件行为 + 包契约（无 DOM，38 项）
 node test/smoke.mjs
-# 预期：31 行 PASS + ALL PASS
+# 预期：38 行 PASS + ALL PASS
 ```
 
-`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **23 项行为**：过滤（blank / subagent / 空闲）、排序、四种行状态、计数徽标、空态、点击转发、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数）、CSS 里没有 `position: fixed`（坞不再浮层）、挂载时把底部动作行改成可换行（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。23 + 8 = 31，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
+`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **30 项行为**：过滤（blank / subagent / 空闲）、排序、五种行状态（运行中 / 等待审批 / 计划待审 / 等待回答 / 已完成）、计数徽标、点击转发（含「已完成」行）、头部状态点（活跃脉冲 / 只剩已完成时静止 / 空态灰点）、空态、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数 / 只剩已完成时静止）、CSS 里没有 `position: fixed`（坞不再浮层）、「已完成」配色只用主题 token、挂载时把底部动作行改成可换行（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。30 + 8 = 38，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
 
 ### 只能在浏览器里看的（逐条打勾）
 
 - [ ] 侧栏底部、设置行上方出现坞；有进行中会话时标题「进行中」，右侧有数字徽标。
 - [ ] 行按最近更新时间排，刚发过消息的在最上面。
 - [ ] 行标题过长显示省略号，不换行、不撑宽坞。
+- [ ] 「已完成」行尾是灰字（不抢眼、不是橙色告警），和「运行中」的绿色、待处理的橙色区分得开。
 - [ ] 运行中行尾是绿色「运行中」；待处理是橙色。
 - [ ] 点一行，主视图切到该会话；悬停提示「打开这个会话 — 标题」。
 - [ ] 没有进行中会话时收成一行细字，文字「暂无进行中」，点为灰色且不动，没有边框。
@@ -348,6 +360,9 @@ node test/smoke.mjs
 - [ ] 启动一个 subagent：它不出现在坞里。
 - [ ] 行数很多时：列表在坞内滚动，坞不超过 200px / 28vh。
 - [ ] 坞下面「用量统计」「会话管理」这些原有入口都还在，且各占一行。
+- [ ] 在别的页签 / 主视图之外让一个会话跑完：坞里多出一行灰字「已完成」，头部绿点变成静止的小圆点（不再脉冲）。
+- [ ] 点那行「已完成」进去看，再回来：该行消失，计数 -1。
+- [ ] 窄栏（56px）时只剩「已完成」会话：圆片里仍是计数，圆点静止、不脉冲。
 
 ## 已知边界
 
@@ -358,14 +373,15 @@ node test/smoke.mjs
 - **靠负 `order` 抢位**：`order: -10` 保证坞排在官方底部动作（默认 0）之前。代价：官方若也发负 order，顺序会变；这是槽位顺序契约，不是坞能单方面决定的。
 - **改宿主布局的代价**：宿主给的槽位内容是 `display: contents` 锚点，本身没有「独占一行」的契约。坞挂载时用 `closest('[data-slot="sidebar.footer.action"]')` 找到锚点、给它父元素加 `flex-wrap: wrap`（另有一条等价 `:has()` 规则管首帧），这样每个入口各占一行、官方入口排在坞下面。代价：宿主改这个 `data-slot` 锚点、或换掉这一层容器时，坞会和官方动作挤在同一行，需要回来改选择器。
 - **只做导航**：点行只切换会话，不能停止运行、不能回答提问 / 审批。那些动作在官方浮层里；坞刻意不复制第二套交互。
-- **不显示「完成未读」**：`completionUnread` 字段没有用上。代价：会话刚跑完就从坞里消失，错过「刚结束」的提醒 —— 那是官方侧栏的职责。
+- **「已完成」只覆盖主视图之外的结束**：`completionUnread` 由官方置位，而官方在会话是主视图（`retainedBy.mainView > 0`）时会清掉它。代价：你正盯着某个会话看它跑完时，它不会以「已完成」留在坞里 —— 那是「你已经看过」的正常情况，坞不去猜「其实没仔细看」。
+- **「已完成」没有单独清除按钮**：唯一清除方式是打开该会话（官方随即清标记），或等下一轮 reconcile。代价：不想看的提醒也得点进去一次才消失；补一个「全部标记已读」需要 Host 或官方接口，超出本插件的只读边界。
 - **不显示 subagent**：`origin === 'subagent'` 被过滤。代价：子代理在跑什么，得进主会话看；换来的是一个任务不会在坞里裂成多行。
 - **不显示空白会话**：`blank === true` 被过滤。代价：刚新建、还没发消息的会话不出现在坞里（它本来也不算「进行中」）。
 - **排序只看 `updatedAt`**：不跟随侧栏的固定 / 手动排序。代价：长时间不写消息的旧会话可能排在刚启动的会话后面。
 - **待处理文案是归类，不是官方原文**：`kind` 做包含匹配，未知 kind 落到「等待回答」。代价：将来新增的交互类型会显示成「等待回答」，需要回来补映射。
 - **没有设置项**：没有开关、位置、透明度、快捷键。装了就一直在；不想看只能卸载。改这些要改 `client.js` 的 CSS 常量。
-- **界面文案在代码里**：`locale/*.json` 只管插件页标题 / 描述；坞里的 7 个 key 在 `client.js` 的 `DICTS`。代价：加语言要改代码并重新装。
-- **不读归档 / 固定状态**：只按 running / pending 筛。代价：若某会话归档后仍带运行状态，坞不会隐藏它 —— 这时它会和侧栏的归档视图不一致。
+- **界面文案在代码里**：`locale/*.json` 只管插件页标题 / 描述；坞里的 8 个 key 在 `client.js` 的 `DICTS`。代价：加语言要改代码并重新装。
+- **不读归档 / 固定状态**：只按 running / pending / completionUnread 筛。代价：若某会话归档后仍带运行状态，坞不会隐藏它 —— 这时它会和侧栏的归档视图不一致。
 
 ## 相关文件
 
@@ -379,4 +395,4 @@ node test/smoke.mjs
 | [index.js](running-sessions-float/index.js) | Host 半边（空 `apply()`） |
 | [package.json](running-sessions-float/package.json) | 包声明：bundle patch + client 声明 |
 | [cordis.patch.yml](running-sessions-float/cordis.patch.yml) | 装配行 |
-| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（31 项） |
+| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（38 项） |

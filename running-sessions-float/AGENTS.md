@@ -23,7 +23,7 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 | `package.json` | `exports["."] = ./index.js`、`exports["./client"] = ./client.js`；`dsh.bundle.patch` 指 patch，`dsh.client` 声明 web + 启动即加载 + 依赖 session UI 包 |
 | `cordis.patch.yml` | `insert` 一行：id `running-sessions-float` → `@local/running-sessions-float` |
 | `index.js` | Host 半边，导出空 `apply()`（8 行），只给 bundle 一个挂载入口 |
-| `client.js` | 浏览器半边（429 行）：`DICTS` / `promoteFooterContainer` / `CSS` / `useTranslator` / `pendingLabel` / `RunningSessionsDock` / `apply` |
+| `client.js` | 浏览器半边（465 行）：`DICTS` / `promoteFooterContainer` / `CSS` / `useTranslator` / `pendingLabel` / `RunningSessionsDock` / `apply` |
 
 加载路径：`dsh.client.immediately: true` → 启动即加载，不等面板打开；`inject` 里的
 `@deepseek-ai/dsh-client-ui-session` 先激活，`useSessions` / `useSessionStatus` 才在渲染前就位。
@@ -36,7 +36,7 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 | 面 | 契约 |
 |---|---|
 | slot | `sidebar.footer.action`（list 槽，`scope: root`，owner props 只有 `wide`，无 patterns），id `running-sessions-float`，`order: -10`（负值排在官方动作默认 0 之前）；注册走 `ctx.slots.inject(...)` 等槽存在。挂载时给该行加 `flex-wrap: wrap`（`promoteFooterContainer`），每个入口各占一行、官方入口排在坞下面 |
-| locale | 命名空间 `local.runningSessions`；en / zh 各 7 个 key（`title` `running` `approval` `plan` `answer` `empty` `openHint`） |
+| locale | 命名空间 `local.runningSessions`；en / zh 各 8 个 key（`title` `running` `approval` `plan` `answer` `done` `empty` `openHint`） |
 | inject face | 组件拿到 `{ locale, openSession }`；`openSession` 内部再判 `uiWorkspace.openSession` 是否存在 |
 | 数据入 | slot 标准 props：`useSessions(select)` / `useSessionStatus(select)` |
 | 副作用出 | 仅 `uiWorkspace.openSession(sessionId)`（点击行） |
@@ -65,27 +65,29 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 | 来源 | 字段 | 用途 |
 |---|---|---|
 | `useSessions` | `ids[]`、`byId[id] = { displayTitle, updatedAt, running, blank, origin, retainedBy }` | 候选集、标题、排序键、过滤 |
-| `useSessionStatus` | `Map<id, { running, pendingInteraction: { kind }, completionUnread }>` | 实时运行态、待办归类 |
-| 派生 `rows` | `{ id, title, updatedAt, state: { text, tone } }` | 按 `updatedAt` 降序；`tone` 为 `live` / `warn` |
+| `useSessionStatus` | `Map<id, { running, pendingInteraction: { kind }, completionUnread }>` | 实时运行态、待办归类、「已完成」提醒 |
+| 派生 `rows` | `{ id, title, updatedAt, live, state: { text, tone } }` | 按 `updatedAt` 降序；`tone` 为 `live` / `warn` / `done`；`live` 表示「还在跑或在等你」 |
 
 规则要点（改任一条要同步 smoke / README / IMPLEMENTATION）：
 
 1. `blank === true` 与 `origin === 'subagent'` 不进坞；
-2. 保留条件是 `running || pendingInteraction`；
-3. 有 `pendingInteraction` 时**优先显示待处理**，即使 `running` 为真；
+2. 保留条件是 `running || pendingInteraction || completionUnread`；
+3. 显示优先级 待处理 > 运行中 > 已完成：有 `pendingInteraction` 时**优先显示待处理**，即使 `running` 为真；只有停下且 `completionUnread` 时才显示「已完成」（`tone: 'done'`，次级文字色）；
 4. `kind` 做小写包含匹配：含 `plan` → 计划待审，含 `approval` / `permission` → 等待审批，其余 → 等待回答；
-5. `completionUnread` 与 `retainedBy` 当前**未使用**（已知边界，不是漏读）。
+5. `completionUnread` 只从状态快照读，缺字段按 `false`（列表快照里没有这个事实）；`retainedBy` 仍**未使用**（已知边界，不是漏读）。
+6. 坞头状态点看 `rows.some(row => row.live)`：有活跃行才脉冲，只剩「已完成」时用 `rsf-settled`（静止 6px）。
 
 ## 测试与质量
 
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs          # 31 项，必须 ALL PASS
+node test/smoke.mjs          # 38 项，必须 ALL PASS
 ```
 
-`test/smoke.mjs` 用 `vm` 加载本包的 `client.js`、React 桩渲染，23 项行为断言（过滤 / 排序 / 四种状态 /
-计数 / 空态 / 点击转发 / locale 回落 / 无 openSession / en 字典注册 / 窄栏圆片与计数 / CSS 无 `position: fixed` /
+`test/smoke.mjs` 用 `vm` 加载本包的 `client.js`、React 桩渲染，30 项行为断言（过滤 / 排序 / 五种状态 /
+计数 / 点击转发（含「已完成」行）/ 坞头状态点（活跃脉冲 / 只剩已完成时静止 / 空态）/ 空态 / locale 回落 /
+无 openSession / en 字典注册 / 窄栏圆片与计数与静止点 / CSS 无 `position: fixed` / 「已完成」配色只用主题 token /
 挂载时给底部动作行加 `flex-wrap: wrap`（锚点是该行唯一子元素时也生效）、卸载时还原）
 + 8 项包契约（client id 与包名一致、注册在 `sidebar.footer.action`、`order < 0`、patch 行指向本包、
 `files` 含运行文件、zh/en 键集合相同、每个 `t()` 键两本都有、只 require react）。
@@ -98,11 +100,13 @@ node test/smoke.mjs          # 31 项，必须 ALL PASS
 - **装不上，报 `not-bundle` / 找不到 manifest**：target 指到仓库根了，改指本目录。
 - **装完没变化**：只装没启用；或 `application: restart-required` 需重启 Harness。
 - **改 `client.js` 页面没变**：装的是副本（git / tarball），或部署没挂 `client-hmr`。
-- **坞一直「暂无进行中」**：确实没有 running / pending 会话，或它们都是 blank / subagent（被刻意过滤）。
+- **坞一直「暂无进行中」**：确实没有 running / pending / 完成未读的会话，或它们都是 blank / subagent（被刻意过滤）。
+- **会话跑完了坞里却没有「已完成」**：它当时是主视图（官方在 `reconcileStatus` 里会清 `completionUnread`），或已归档 / 被删 —— 属预期。
 - **点行没反应**：部署里没有 `uiWorkspace`，属降级行为。
 - **坞和官方底部动作挤在同一行**：`promoteFooterContainer` 没找到锚点（宿主改了 `data-slot` 名）或 `closest` 不可用，坞退化成 row 里的一个 flex 项 —— 数据不受影响，改选择器即可。
 - **坞盖住会话列表**：说明被改回了 `position: fixed` / `shell.overlay`，这违反约束 5。
 - **加一个可见文案就红**：smoke 双向校验 zh/en 键与每个 `t()` 键，先补齐 `DICTS` 两本。
+- **「已完成」行点了不消失**：点击只切视图，官方要把该会话变成主视图才清标记，可能滞后一拍；别在坞里自己造「已读」状态。
 - **不要为了「方便」加 Host 逻辑**：那会改变生效条件、权限与验证方式，等于换一类插件。
 
 ## 相关文件清单
@@ -124,3 +128,4 @@ node test/smoke.mjs          # 31 项，必须 ALL PASS
 | 2026-10-20 | 新建本模块文档（init-architect）：职责 / 入口 / 接口 / 数据形状 / 测试映射，内容取自现有代码与根文档，未移动根 AGENTS.md 原文 |
 | 2026-10-20 | 位置修正：槽位从 `shell.overlay`（fixed、order 60）改为 `sidebar.footer.action`（正常流、order -10），补窄栏圆片与 `:has()` 布局介入；行数 318 → 368、断言 21 → 27。 |
 | 2026-10-20 | 共存修正：挂载时 `promoteFooterContainer` 给槽位所在那一行加 `flex-wrap: wrap`（锚点是该行唯一子元素时也生效，卸载还原），各入口的 `flex: 0 0 100%` 变成「各占一行」，官方入口排在坞下面；改成 column 会让搜索入口涨满高度（已复现）。坞最高 200px。行数 368 → 429，断言 27 → 31。 |
+| 2026-10-21 | 完成未读：`completionUnread` 从「未使用」改为第三个保留条件，行尾灰字「已完成」（`tone: 'done'`，`--dsw-alias-label-tertiary`），优先级 待处理 > 运行中 > 已完成；`rows` 多一个 `live` 字段，坞头圆点在只剩「已完成」时切到 `rsf-settled`（静止 6px）。行数 429 → 465，断言 31 → 38。 |

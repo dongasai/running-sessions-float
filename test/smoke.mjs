@@ -92,12 +92,13 @@ const summary = (id, patch) => ({
 });
 
 const listState = {
-  ids: ['run', 'approve', 'plan', 'question', 'blank', 'sub', 'idle', 'unknown'],
+  ids: ['run', 'approve', 'plan', 'question', 'finished', 'blank', 'sub', 'idle', 'unknown'],
   byId: {
     run: summary('run', { title: '运行中的会话', updatedAt: 500, running: true }),
     approve: summary('approve', { title: '等审批', updatedAt: 900 }),
     plan: summary('plan', { title: '等计划审', updatedAt: 800 }),
     question: summary('question', { title: '等回答', updatedAt: 700 }),
+    finished: summary('finished', { title: '刚结束', updatedAt: 850 }),
     blank: summary('blank', { title: '空白', updatedAt: 950, running: true, blank: true }),
     sub: summary('sub', { title: '子代理', updatedAt: 940, running: true, origin: 'subagent' }),
     idle: summary('idle', { title: '空闲', updatedAt: 930, running: false }),
@@ -109,6 +110,7 @@ const statusState = new Map([
   ['plan', { running: false, pendingInteraction: { kind: 'plan-review' } }],
   ['question', { running: false, pendingInteraction: { kind: 'question' } }],
   ['unknown', { running: false, pendingInteraction: { kind: 'permission' } }],
+  ['finished', { running: false, pendingInteraction: undefined, completionUnread: true }],
 ]);
 
 const render = (component, sessions, statuses, options = {}) => component({
@@ -134,6 +136,7 @@ function inspect(tree) {
   const buttons = [];
   const rails = [];
   const styles = [];
+  const pulses = [];
   const walk = (node) => {
     if (node === null || node === undefined || node === false) return;
     if (typeof node === 'string') { texts.push(node); return; }
@@ -143,6 +146,7 @@ function inspect(tree) {
     if (node.type === 'button') buttons.push(node);
     if (node.type === 'style') styles.push(node);
     if (String(node.props?.className || '').split(/\s+/).includes('rsf-rail')) rails.push(node);
+    if (String(node.props?.className || '').split(/\s+/).includes('rsf-pulse')) pulses.push(node);
     walk(node.props?.children);
   };
   walk(tree);
@@ -157,7 +161,7 @@ function inspect(tree) {
       onClick: button.props.onClick,
     };
   });
-  return { texts, sections, rows, rails, styles };
+  return { texts, sections, rows, rails, styles, pulses };
 }
 
 const view = inspect(render(component, listState, statusState, { openSession: (id) => openedIds.push(id) }));
@@ -166,6 +170,14 @@ const fallback = inspect(render(component, { ids: [], byId: {} }, new Map(), { l
 const noOp = inspect(render(component, listState, statusState, { openSession: undefined }));
 const rail = inspect(render(component, listState, statusState, { wide: false }));
 const railEmpty = inspect(render(component, { ids: ['idle'], byId: { idle: listState.byId.idle } }, new Map(), { wide: false }));
+// Only finished-but-unread rows left: the header must stop claiming activity.
+const settled = inspect(render(component,
+  { ids: ['finished'], byId: { finished: listState.byId.finished } },
+  statusState));
+const settledRail = inspect(render(component,
+  { ids: ['finished'], byId: { finished: listState.byId.finished } },
+  statusState,
+  { wide: false }));
 const css = view.styles[0]?.props?.dangerouslySetInnerHTML?.__html || '';
 
 let failures = 0;
@@ -175,17 +187,24 @@ const check = (name, pass) => {
 };
 
 check('dock class', view.sections[0]?.props?.className === 'rsf-dock');
-check('five rows (blank / subagent / idle filtered)', view.rows.length === 5);
+check('six rows (blank / subagent / idle filtered)', view.rows.length === 6);
 check('rows sorted by updatedAt desc',
   JSON.stringify(view.rows.map((row) => row.title)) ===
-  JSON.stringify(['等审批', '等计划审', '等回答', '未知待办', '运行中的会话']));
+  JSON.stringify(['等审批', '刚结束', '等计划审', '等回答', '未知待办', '运行中的会话']));
 check('state labels', JSON.stringify(view.rows.map((row) => row.state)) ===
-  JSON.stringify(['等待审批', '计划待审', '等待回答', '等待审批', '运行中']));
-check('count badge', view.texts.includes('5'));
-check('running tone class', view.rows[4].stateClass === 'rsf-row-state rsf-live');
+  JSON.stringify(['等待审批', '已完成', '计划待审', '等待回答', '等待审批', '运行中']));
+check('count badge', view.texts.includes('6'));
+check('running tone class', view.rows[5].stateClass === 'rsf-row-state rsf-live');
 check('pending tone class', view.rows[0].stateClass === 'rsf-row-state rsf-warn');
+check('finished-unread row keeps a done tone', view.rows[1].stateClass === 'rsf-row-state rsf-done');
 view.rows[0].onClick();
 check('click forwards the session id', openedIds[0] === 'approve');
+view.rows[1].onClick();
+check('finished-unread row opens the session too', openedIds[1] === 'finished');
+check('working dock keeps the pulsing dot', view.pulses[0]?.props?.className === 'rsf-pulse');
+check('finished-only dock uses the settled dot',
+  settled.pulses[0]?.props?.className === 'rsf-pulse rsf-settled' &&
+  settled.rows.length === 1 && settled.rows[0].state === '已完成');
 check('empty dock class', empty.sections[0]?.props?.className === 'rsf-dock rsf-empty');
 check('empty copy', empty.texts.includes('暂无进行中'));
 check('empty state has no count badge', !empty.texts.some((text) => /^\d+$/.test(text)));
@@ -201,11 +220,15 @@ check('missing openSession degrades to a no-op', threw === false);
 check('rail mode renders a chip, not the list',
   rail.rails.length === 1 && rail.sections.length === 0 && rail.rows.length === 0);
 check('rail chip carries the count',
-  rail.rails[0]?.props?.['aria-label'] === '进行中 · 5' && textOf(rail.rails[0]) === '5');
+  rail.rails[0]?.props?.['aria-label'] === '进行中 · 6' && textOf(rail.rails[0]) === '6');
 check('rail chip with nothing running has no count',
   railEmpty.rails[0]?.props?.className === 'rsf-rail rsf-idle' && textOf(railEmpty.rails[0]) === '');
+check('rail chip settles when only finished-unread rows remain',
+  settledRail.pulses[0]?.props?.className === 'rsf-pulse rsf-settled' && textOf(settledRail.rails[0]) === '1');
 check('dock CSS is in normal flow, not a fixed overlay',
   !/position:\s*fixed/.test(css) && css.includes('data-slot="sidebar.footer.action"'));
+check('finished-unread styling stays on theme tokens',
+  /\.rsf-row-state\.rsf-done\s*\{\s*color:\s*var\(--dsw-alias-label-tertiary\)/.test(css));
 
 // The footer row must be allowed to wrap: every entry asks for a full line with a
 // 100% flex basis, so a non-wrapping row squeezes the official entries out of the

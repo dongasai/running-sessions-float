@@ -9,8 +9,9 @@
  *
  * Data comes from the framework standard hooks the slot already provides:
  * `useSessions` (session catalog with `displayTitle`/`running`/`updatedAt`) and
- * `useSessionStatus` (live run state plus the pending-user-interaction class).
- * Nothing is polled; both hooks are observable snapshots maintained elsewhere.
+ * `useSessionStatus` (live run state plus the pending-user-interaction class and
+ * the finished-but-unread flag). Nothing is polled; both hooks are observable
+ * snapshots maintained elsewhere.
  */
 window.__ModuleLoader__.load({
   id: '@local/running-sessions-float',
@@ -30,6 +31,9 @@ window.__ModuleLoader__.load({
         approval: 'Awaiting approval',
         plan: 'Plan review',
         answer: 'Awaiting answer',
+        // Same wording and meaning as the host's own session rows: the run
+        // stopped while you were elsewhere and the result has not been seen yet.
+        done: 'Completed',
         empty: 'Nothing in progress',
         openHint: 'Open this session',
       },
@@ -39,6 +43,8 @@ window.__ModuleLoader__.load({
         approval: '等待审批',
         plan: '计划待审',
         answer: '等待回答',
+        // 与官方会话行同一措辞：跑完了但结果还没看过（对应 completionUnread）。
+        done: '已完成',
         empty: '暂无进行中',
         openHint: '打开这个会话',
       },
@@ -187,6 +193,14 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
   background: var(--dsw-alias-state-idle-primary);
   animation: none;
 }
+/* Finished-but-unread is a reminder, not activity: the dot stays the "done"
+   success color but stops breathing, so the header never claims a run is live.
+   It stays 6px so the header height does not jump when the last run ends. */
+.rsf-pulse.rsf-settled {
+  width: 6px;
+  height: 6px;
+  animation: none;
+}
 @keyframes rsf-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.75); }
@@ -259,6 +273,9 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
 .rsf-row-state.rsf-warn {
   color: var(--dsw-alias-state-warn-primary);
 }
+.rsf-row-state.rsf-done {
+  color: var(--dsw-alias-label-tertiary);
+}
 `;
     /**
      * Subscribe the calling component to locale switches and expose the
@@ -319,12 +336,27 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
             ? status.running === true
             : summary.running === true;
           const pending = status ? status.pendingInteraction : undefined;
-          if (!running && !pending) continue;
+          // A stop outside the main view leaves `completionUnread` set until the
+          // session is opened; without this row a finished run just vanishes from
+          // the dock. The official sidebar shows the same fact as「已完成」.
+          const done = status ? status.completionUnread === true : false;
+          if (!running && !pending && !done) continue;
+          // `live` mirrors the branch that actually won, so a "still working
+          // for you" row and the header pulse can never disagree.
+          let state;
+          let live = true;
+          if (pending) state = pendingLabel(pending.kind, t);
+          else if (running) state = { text: t('running'), tone: 'live' };
+          else {
+            state = { text: t('done'), tone: 'done' };
+            live = false;
+          }
           visible.push({
             id,
             title: summary.displayTitle || id,
             updatedAt: summary.updatedAt || 0,
-            state: pending ? pendingLabel(pending.kind, t) : { text: t('running'), tone: 'live' },
+            live,
+            state,
           });
         }
         visible.sort((left, right) => right.updatedAt - left.updatedAt);
@@ -332,6 +364,10 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
       }, [list, statuses, t]);
 
       const empty = rows.length === 0;
+      // The header dot reports activity, not occupancy: as long as one row is
+      // still running or waiting it pulses; once every row is only a finished-
+      // but-unread reminder it settles to the quiet success dot.
+      const active = rows.some(row => row.live);
 
       // The rail has no room for a list; it shows the count so collapsing the
       // sidebar hides the rows, not the fact that something is running.
@@ -346,7 +382,7 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
             'aria-label': railLabel,
           },
             h('span', {
-              className: empty ? 'rsf-pulse rsf-idle' : 'rsf-pulse',
+              className: empty ? 'rsf-pulse rsf-idle' : active ? 'rsf-pulse' : 'rsf-pulse rsf-settled',
               'aria-hidden': true,
             }),
             empty ? null : h('span', { className: 'rsf-rail-count' }, String(rows.length)),
@@ -366,7 +402,7 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
         },
           h('header', { className: 'rsf-head' },
             h('span', {
-              className: empty ? 'rsf-pulse rsf-idle' : 'rsf-pulse',
+              className: empty ? 'rsf-pulse rsf-idle' : active ? 'rsf-pulse' : 'rsf-pulse rsf-settled',
               'aria-hidden': true,
             }),
             h('span', { className: 'rsf-title' }, empty ? t('empty') : t('title')),

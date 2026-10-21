@@ -11,7 +11,7 @@ Session Controller（官方，事件驱动）
   └─ useSessionStatus ─→ 运行状态：Map<id, { running, pendingInteraction, completionUnread }>
                                    │
                                    ▼
-                     rows = 过滤(blank / subagent) → 保留(running 或 pending) → 按 updatedAt 降序
+                     rows = 过滤(blank / subagent) → 保留(running 或 pending 或完成未读) → 按 updatedAt 降序
                                    │
                                    ▼
                      .rsf-dock（sidebar.footer.action 里的正常流元素）
@@ -60,7 +60,7 @@ export function apply() {}
 | 窄栏圆片 | `36px × 36px` | 与同槽位官方 Cordis 动作的 36px 对齐 |
 | 顺序 | `order: -10` | 官方底部动作都用默认 0；负值让坞排到槽位内容区顶部，官方入口在它下面 |
 
-这些值都在 `client.js` 的 `CSS` 常量里（第 99–262 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
+这些值都在 `client.js` 的 `CSS` 常量里（第 105–279 行），没有读任何布局变量。官方改侧栏内边距 / 底部结构时，这里要跟着看。
 
 ## 过滤规则
 
@@ -71,15 +71,29 @@ if (!summary || summary.blank === true || summary.origin === 'subagent') continu
 - **空白会话**：`blank` 是「新建但还没发消息」的占位会话，没有「进行中」的意义；放进来会让每次新建都多一行没内容的条目。
 - **subagent 会话**：`origin === 'subagent'` 的子会话的标题是子代理自己的标签。把它们列出来，一个任务会在坞里裂成多行，反而看不出「主会话在跑」。想看子代理进度，进主会话看。
 
-保留条件是 `running` 与 `pending` 的**并集**：
+保留条件是 `running`、`pending` 与「完成未读」的**并集**：
 
 ```js
 const running = status && status.running !== undefined ? status.running === true : summary.running === true;
 const pending = status ? status.pendingInteraction : undefined;
-if (!running && !pending) continue;
+const done = status ? status.completionUnread === true : false;
+if (!running && !pending && !done) continue;
 ```
 
 `status.running` 是事件驱动的最新值；快照里还没有这个 id 时（刚创建、还没收到状态），退回列表快照的 `summary.running`。两者都不确定时不列 —— 宁可少一行，不要留一行假「运行中」。
+
+`completionUnread` 只认状态快照：列表快照里没有这个事实，缺字段就按「已读过」处理，不猜。官方语义是「在主视图之外观察到一次停止」——`observeRunning` 把 `true → false` 记进 `completionUnread`，而 `reconcileStatus` 每隔一轮把 `retainedBy.mainView > 0` 的会话从这个集合里删掉，回到主视图 / 打开会话同样会清。所以坞里出现的「已完成」行一定是「你没当前看着它跑完」的那些。
+
+## 为什么把「完成未读」也收进来
+
+早先版本只用 running / pending 两个条件，会话一跑完就从坞里消失 —— 那正是需求里说的「已经运行结束但未读的没有显示」。补这一行的取舍：
+
+- **它是同一个 Hook 的第三个字段**，不新增数据源、不轮询，因此不违反「坞是聚合视图，不是第二份真相」的约束。
+- **措辞抄官方**：官方会话行把 `completed` 显示成「已完成」（`status.completed`），坞用同一个词、同一层含义，避免用户在两处看到两种说法。
+- **优先级排在最后**：待处理 > 运行中 > 已完成。一个刚跑完又被追问的会话应当先说「等待回答」，而不是「已完成」。
+- **配色降级**：运行中是 success 绿、待处理是 warn 橙，已完成用次级文字色 `--dsw-alias-label-tertiary` —— 它是提醒，不是告警，不该抢走待处理的注意力。
+- **头部状态点跟着降级**：只要还有 running / pending 的行，坞头绿点继续脉冲；只剩「已完成」提醒时换成 6px 静止圆点（`rsf-settled`）。否则最后一个任务跑完时，坞头还在脉冲，等于在撒谎。尺寸保持 6px 是为了切换时坞头高度不跳。
+- **固定座位不变**：全部清空后仍回落到「暂无进行中」细行，不新增空态分支。
 
 ## 排序
 
@@ -117,7 +131,7 @@ return { text: t('answer'), tone: 'warn' };
 ## locale 两层
 
 - `locale/en.json` / `locale/zh.json` 的 `meta` 只服务**插件页**：列表里的标题与描述。
-- 坞里的界面文案在 `client.js` 的 `DICTS`（en / zh 各 7 个 key），通过 `locale.register('local.runningSessions', DICTS)` 注册；组件用 `locale.subscribe` 订阅语言切换，`locale.bind(NS)` 取翻译。
+- 坞里的界面文案在 `client.js` 的 `DICTS`（en / zh 各 8 个 key），通过 `locale.register('local.runningSessions', DICTS)` 注册；组件用 `locale.subscribe` 订阅语言切换，`locale.bind(NS)` 取翻译。
 - locale 服务不存在时，`useTranslator` 退回内置 `DICTS.zh`。这就是「locale 服务缺失时界面是中文」的来源，不是漏翻译。
 
 把界面文案放进 `client.js` 而不是 `locale/*.json`，是因为后者由 Host 侧插件清单读取，只承载 meta；运行时字典走 Client locale 服务。加语言要同时改 `DICTS` 并重新装。
@@ -151,9 +165,9 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 
 ## 降级路径
 
-- `uiWorkspace` 不存在：`openSession` 是 `undefined`，点击处理里 `if (openSession)` 直接跳过；按钮仍可聚焦、可点，只是不导航。
+- `uiWorkspace` 不存在：`openSession` 是 `undefined`，点击处理里 `if (openSession)` 直接跳过；按钮仍可聚焦、可点，只是不导航。已完成的提醒行也因此点不掉，只能等官方下一轮 reconcile。
 - `locale` 不存在或不完整：`register` / `subscribe` / `bind` 都先做 `typeof` 检查；组件始终能渲染。
-- 状态快照里没有某个会话：用列表快照的 `summary.running` 兜底；都没有就不列。
+- 状态快照里没有某个会话：`running` 用列表快照的 `summary.running` 兜底，`completionUnread` 则一律按 `false`（没有可信来源就不显示「已完成」）；都没有就不列。
 - `wide === false`（侧栏折叠成 56px 窄栏）：不渲染列表，只渲染 36px 圆片 + 计数；`aria-label` 写「进行中 · N」，空态写「暂无进行中」。这是唯一按槽位 owner props 分叉的地方，圆片不可点（槽位没给展开侧栏的回调）。
 - `:has()` 不被支持：换行由组件挂载时的 `promoteFooterContainer` 完成，`wide: false` 时不介入（窄栏本来就是一行图标）。
 - 节点没有 `closest`、或锚点被宿主改名：找不到锚点就什么都不改，坞退化成 row 里的一个 flex 项（会挤邻居，但数据与文案不受影响）。
@@ -164,7 +178,9 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 
 - 过滤：blank / subagent / 空闲不进坞；
 - 排序：按 `updatedAt` 降序；
-- 文案：等待审批 / 计划待审 / 等待回答 / 运行中；
+- 文案：等待审批 / 计划待审 / 等待回答 / 运行中 / 已完成；
+- 完成未读：只带 `completionUnread` 的会话进坞、排在其 `updatedAt` 位置、点它也能转发 id、行尾灰字配色只用主题 token；
+- 头部状态点：有 running / pending 时是 `rsf-pulse`，只剩「已完成」时是 `rsf-pulse rsf-settled`（含窄栏圆片）；
 - 计数徽标、空态类名与文案、空态无计数；
 - 点击把 id 转发给 `openSession`；
 - 没有 locale 服务时回落中文；
@@ -178,4 +194,4 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 `sidebar.footer.action`、`order < 0`（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、
 zh / en 键集合相同、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。
 
-23 + 8 = 31 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。
+30 + 8 = 38 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。

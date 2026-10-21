@@ -16,6 +16,7 @@
 | 2026-10-20 | 修正上述安装章节：方式二上一版抄漏了 `git+https://` 写法与 `# 或`、`# 钉版本` 三条命令的原有格式；现按 `readme-spec` 原样补齐，并把三条命令的实际结果（依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，随后 `cannot resolve profile bundle`）写在命令下方。 |
 | 2026-10-20 | 位置修正：坞从 `shell.overlay` 的固定浮层（`left: 10px / bottom: 76px`，会盖住列表）迁到官方 `sidebar.footer.action` 槽位、`order: -10`，成为侧栏底部动作区顶部的一块正常流；56px 窄栏改渲染 36px 计数圆片。同步 `client.js`、smoke（21 → 27 项）、README、IMPLEMENTATION、两份 AGENTS、`.agents/index.json` 与 locale meta。 |
 | 2026-10-20 | 共存修正：坞挂载时给 `sidebar.footer.action` 那一行加 `flex-wrap: wrap`（`promoteFooterContainer`，另有等价 `:has()` 规则管首帧），生态里各入口的 `flex: 0 0 100%` 于是各占一行，用量统计 / 会话管理 / 搜索都排在坞下面。坞最高从 `min(46vh, 380px)` 收到 `min(28vh, 200px)`。**`flex-direction: column` 是错的**：列里 100% 按高度算，搜索入口涨成 256×139.95 把别人顶出屏幕（已在无头 Chrome 复现）。同步 `client.js`（368 → 429 行）、smoke（27 → 31 项）、README、IMPLEMENTATION、包内 AGENTS 与 `.agents/index.json`。 |
+| 2026-10-21 | 完成未读：把 `useSessionStatus` 的第三个字段 `completionUnread` 纳入坞 —— 在主视图之外跑完的会话不再直接消失，行尾显示灰字「已完成」（与官方 `status.completed` 同词），显示优先级 待处理 > 运行中 > 已完成；坞头状态点在「只剩已完成」时换成静止的 6px 圆点（`rsf-settled`）。同步 `client.js`（429 → 465 行）、smoke（31 → 38 项）、README、IMPLEMENTATION、两份 AGENTS 与 `.agents/index.json`。 |
 
 ## 项目是什么
 
@@ -25,7 +26,7 @@
   无工具、无路由、无状态、无配置。
 - **浏览器半边 [client.js](running-sessions-float/client.js)**：在 `sidebar.footer.action` 注册一个
   「进行中」坞（侧栏底部动作区顶部，正常流，不浮层），读标准 Hook `useSessions` / `useSessionStatus`，
-  筛出 running / pending 的会话，点击走 `uiWorkspace.openSession`。
+  筛出 running / pending / 完成未读（`completionUnread`）的会话，点击走 `uiWorkspace.openSession`。
 
 它不新增数据源、不轮询、不落盘、不改会话；样式与文案都在 `client.js` 里，无构建、无依赖。
 
@@ -34,7 +35,7 @@
 | 目的 | 命令 |
 |---|---|
 | 语法自检（两半） | `node --check running-sessions-float/index.js && node --check running-sessions-float/client.js` |
-| 冒烟 + 包契约（31 项，先跑这个） | `node test/smoke.mjs` |
+| 冒烟 + 包契约（38 项，先跑这个） | `node test/smoke.mjs` |
 | 校验 manifest | `node -e 'const p=require("./running-sessions-float/package.json");console.log(p.name,p.version,p.dsh)'` |
 | 校验 patch | `python3 -c "import yaml;print(yaml.safe_load(open('running-sessions-float/cordis.patch.yml')))"` |
 | 装进 profile（宿主 shell） | `dsh plugin --profile web add "link:$(realpath running-sessions-float)"` |
@@ -76,20 +77,20 @@ graph TD
 | 模块 | 路径 | 职责 | 入口 | 文档 |
 |---|---|---|---|---|
 | 插件包 | `running-sessions-float/` | 可安装单元：Host 空、浏览器半边注册坞 | `index.js` / `client.js` | [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) |
-| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（31 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
+| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（38 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
 
 模块候选只有这两个：仓库根是文档编排层，没有 `package.json`，不能单独安装。
 
 ## 文件地图
 
 ```text
-client.js        浏览器半边（429 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
+client.js        浏览器半边（465 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
 index.js         Host 半边：8 行，空 apply()
 cordis.patch.yml insert id=running-sessions-float → @local/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
 AGENTS.md（包内）模块级文档：职责 / 接口 / 数据形状 / FAQ（不进 npm files 白名单）
-test/smoke.mjs   vm + React 桩渲染 + 包契约，31 项
+test/smoke.mjs   vm + React 桩渲染 + 包契约，38 项
 .agents/index.json 扫描状态：模块清单 / 覆盖率 / 缺口 / 续扫入口
 README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```
@@ -111,8 +112,10 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
    否则客户端模块解析不到。
 3. **数据只走标准 Hook**：`useSessions` / `useSessionStatus` 都是官方快照。不要轮询 `agent/status`，
    不要新增 Host 路由 / 状态 —— 坞是聚合视图，不是第二份真相。
-4. **过滤与优先级是契约**：`blank` 与 `origin === 'subagent'` 不进坞；有 `pendingInteraction` 的行
-   **优先显示待处理**（即使 running 为真）；排序只看 `updatedAt` 降序。改任何一条同时改
+4. **过滤与优先级是契约**：`blank` 与 `origin === 'subagent'` 不进坞；保留条件是
+   `running || pendingInteraction || completionUnread`；有 `pendingInteraction` 的行
+   **优先显示待处理**（即使 running 为真），其次是运行中，最后才是「已完成」；排序只看 `updatedAt` 降序。
+   `completionUnread` 只从状态快照读、缺字段按 `false`（列表快照里没有这个事实，不许猜）。改任何一条同时改
    `test/smoke.mjs`、README「它怎么判断」与 IMPLEMENTATION「过滤规则」。
 5. **slot 契约**：`sidebar.footer.action` 是 list 槽（`scope: root`，owner props 只有 `wide`），id
    `running-sessions-float`、order `-10`（负值才排在官方动作之前）；该槽没有 patterns。注册必须走
@@ -142,6 +145,9 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 - 56px 窄栏只剩 36px 计数圆片：看不到标题、也点不开行 —— 侧栏展开才看列表。
 - 空白会话与 subagent 会话不显示 —— 过滤是刻意的。
 - 未知 `pendingInteraction.kind` 落到「等待回答」—— 归类兜底，不是漏了某个分支。
+- 「已完成」只覆盖**主视图之外**的结束（官方在会话是主视图时清 `completionUnread`），而且只能靠打开会话清除 ——
+  坞不做「全部已读」按钮，那要 Host 或官方接口，越过只读边界。只剩「已完成」时坞头圆点静止（`rsf-settled`），
+  不再脉冲假装有任务在跑。
 - 空态仍留一行无边框细字 —— 保留固定座位，避免整块消失。
 - 没有设置项 / 开关 / 快捷键 —— 装了就一直在，不想看只能卸载。
 
@@ -152,7 +158,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs   # 31 项，必须 ALL PASS
+node test/smoke.mjs   # 38 项，必须 ALL PASS
 ```
 
 命令行证明不了的部分（位置、遮挡、主题、悬停、语言切换）照 README 的浏览器打勾清单人工核；
