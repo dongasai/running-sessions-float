@@ -59,11 +59,19 @@ const locale = {
 const openedIds = [];
 let registered;
 
+/**
+ * Apply the plugin with a ctx whose `uiWorkspace` lookup is a live getter, so a
+ * late-provided service (the real boot order) can be simulated: `workspace.get`
+ * stays undefined during apply and is filled in afterwards.
+ */
 function applyWith(openSession) {
+  const workspace = { current: openSession === undefined ? undefined : { openSession } };
+  const lookedUp = [];
   const ctx = {
     get(name) {
+      lookedUp.push(name);
       if (name === 'locale') return locale;
-      if (name === 'uiWorkspace') return openSession === undefined ? undefined : { openSession };
+      if (name === 'uiWorkspace') return workspace.current;
       return undefined;
     },
     effect(fn) { fn(); },
@@ -76,10 +84,22 @@ function applyWith(openSession) {
     },
   };
   app.apply(ctx);
-  return registered.component;
+  return { component: registered.component, inject: registered.spec.inject, workspace, lookedUp };
 }
 
-const component = applyWith((id) => openedIds.push(id));
+const applied = applyWith(id => openedIds.push(id));
+const component = applied.component;
+/** The dock's own `openSession` wrapper from the slot inject face. */
+const injectedOpen = applied.inject().openSession;
+const lookupsBeforeClick = applied.lookedUp.length;
+
+// The real boot order: `uiWorkspace` is provided by a plugin that loads AFTER
+// this one, so it is absent while `apply` runs. The dock must still navigate
+// once it shows up — this is the bug where every row was silently dead.
+const lateApplied = applyWith(undefined);
+const lateOpen = lateApplied.inject().openSession;
+const lateLookupsAfterApply = lateApplied.lookedUp.length;
+lateApplied.workspace.current = { openSession: id => openedIds.push('late:' + id) };
 
 const summary = (id, patch) => ({
   id,
@@ -201,6 +221,23 @@ view.rows[0].onClick();
 check('click forwards the session id', openedIds[0] === 'approve');
 view.rows[1].onClick();
 check('finished-unread row opens the session too', openedIds[1] === 'finished');
+// The row handler and the inject face must be the same path: rendering passes
+// `openSession` straight through, so a broken wrapper stays invisible unless the
+// injected function itself is exercised.
+injectedOpen('approve');
+check('injected openSession navigates through uiWorkspace', openedIds.includes('approve') && openedIds.length === 3);
+check('apply does not cache uiWorkspace — it is resolved per click',
+  !applied.lookedUp.slice(0, lookupsBeforeClick).includes('uiWorkspace'));
+lateOpen('finished');
+check('a late-provided uiWorkspace still navigates', openedIds.includes('late:finished'));
+let injectedThrew = false;
+try {
+  lateApplied.workspace.current = undefined;
+  lateOpen('approve');
+} catch {
+  injectedThrew = true;
+}
+check('a missing uiWorkspace degrades to a no-op', injectedThrew === false);
 check('working dock keeps the pulsing dot', view.pulses[0]?.props?.className === 'rsf-pulse');
 check('finished-only dock uses the settled dot',
   settled.pulses[0]?.props?.className === 'rsf-pulse rsf-settled' &&

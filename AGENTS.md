@@ -17,6 +17,7 @@
 | 2026-10-20 | 位置修正：坞从 `shell.overlay` 的固定浮层（`left: 10px / bottom: 76px`，会盖住列表）迁到官方 `sidebar.footer.action` 槽位、`order: -10`，成为侧栏底部动作区顶部的一块正常流；56px 窄栏改渲染 36px 计数圆片。同步 `client.js`、smoke（21 → 27 项）、README、IMPLEMENTATION、两份 AGENTS、`.agents/index.json` 与 locale meta。 |
 | 2026-10-20 | 共存修正：坞挂载时给 `sidebar.footer.action` 那一行加 `flex-wrap: wrap`（`promoteFooterContainer`，另有等价 `:has()` 规则管首帧），生态里各入口的 `flex: 0 0 100%` 于是各占一行，用量统计 / 会话管理 / 搜索都排在坞下面。坞最高从 `min(46vh, 380px)` 收到 `min(28vh, 200px)`。**`flex-direction: column` 是错的**：列里 100% 按高度算，搜索入口涨成 256×139.95 把别人顶出屏幕（已在无头 Chrome 复现）。同步 `client.js`（368 → 429 行）、smoke（27 → 31 项）、README、IMPLEMENTATION、包内 AGENTS 与 `.agents/index.json`。 |
 | 2026-10-21 | 完成未读：把 `useSessionStatus` 的第三个字段 `completionUnread` 纳入坞 —— 在主视图之外跑完的会话不再直接消失，行尾显示灰字「已完成」（与官方 `status.completed` 同词），显示优先级 待处理 > 运行中 > 已完成；坞头状态点在「只剩已完成」时换成静止的 6px 圆点（`rsf-settled`）。同步 `client.js`（429 → 465 行）、smoke（31 → 38 项）、README、IMPLEMENTATION、两份 AGENTS 与 `.agents/index.json`。 |
+| 2026-10-21 | 修复点击导航：`uiWorkspace` 早先在 `apply` 时被一次性取值缓存，而它由启动更晚的 `dsh-client-ui-workspace` 提供，缓存到的是 `undefined` —— 于是**所有行点击都静默失效**（用户实测「已完成不能点击跳转」）。改成每次点击现取 + `try/catch`。冒烟补 4 条走 **inject face** 的断言（此前点击断言只测 prop 转发，绕过了插件自己的包装函数），并做过变异验证。`client.js` 465 → 477 行，smoke 38 → 42 项。 |
 
 ## 项目是什么
 
@@ -35,7 +36,7 @@
 | 目的 | 命令 |
 |---|---|
 | 语法自检（两半） | `node --check running-sessions-float/index.js && node --check running-sessions-float/client.js` |
-| 冒烟 + 包契约（38 项，先跑这个） | `node test/smoke.mjs` |
+| 冒烟 + 包契约（42 项，先跑这个） | `node test/smoke.mjs` |
 | 校验 manifest | `node -e 'const p=require("./running-sessions-float/package.json");console.log(p.name,p.version,p.dsh)'` |
 | 校验 patch | `python3 -c "import yaml;print(yaml.safe_load(open('running-sessions-float/cordis.patch.yml')))"` |
 | 装进 profile（宿主 shell） | `dsh plugin --profile web add "link:$(realpath running-sessions-float)"` |
@@ -77,20 +78,20 @@ graph TD
 | 模块 | 路径 | 职责 | 入口 | 文档 |
 |---|---|---|---|---|
 | 插件包 | `running-sessions-float/` | 可安装单元：Host 空、浏览器半边注册坞 | `index.js` / `client.js` | [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) |
-| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（38 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
+| 测试 | `test/` | 组件行为 + manifest / patch / 槽位 / 字典契约（42 项） | `test/smoke.mjs` | 本文件「验证规范」、README「怎么验证」 |
 
 模块候选只有这两个：仓库根是文档编排层，没有 `package.json`，不能单独安装。
 
 ## 文件地图
 
 ```text
-client.js        浏览器半边（465 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
+client.js        浏览器半边（477 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
 index.js         Host 半边：8 行，空 apply()
 cordis.patch.yml insert id=running-sessions-float → @local/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
 AGENTS.md（包内）模块级文档：职责 / 接口 / 数据形状 / FAQ（不进 npm files 白名单）
-test/smoke.mjs   vm + React 桩渲染 + 包契约，38 项
+test/smoke.mjs   vm + React 桩渲染 + 包契约，42 项
 .agents/index.json 扫描状态：模块清单 / 覆盖率 / 缺口 / 续扫入口
 README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```
@@ -102,7 +103,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 - 中文 JSDoc；注释解释**为什么**（尤其过滤、待处理优先级、为什么不再用固定定位），不解释语法。
 - 可见文案进 `DICTS`，不要在属性或子元素里写死中文。
 
-## 硬约束（违反即出 bug）
+## 硬约束（违反即出 bug，11 条）
 
 1. **`client.js` 顶层只允许 `window.__ModuleLoader__.load({...})` 一个调用**；所有常量、函数放 factory 内。
    宿主把所有 client bundle 源码**拼成一个 classic script、不按包隔离作用域**；两个插件各写一个同名顶层
@@ -127,12 +128,17 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
    搜索入口会涨成整块 140px 再把别人顶出屏幕。
 6. **locale 两层**：界面文案只在 `client.js` 的 `DICTS`（zh / en 键必须完全一致，每个 `t('key')`
    两本都要有）；`locale/*.json` 只放插件页 `meta`。`test/smoke.mjs` 会双向查这两条。
-7. **Host 半边保持空**：不要为了「方便」加工具 / 路由 / 状态。那会把纯客户端插件变成 Host 插件，
+7. **可选服务不许在 `apply` 时缓存**：`uiWorkspace` 由 `@deepseek-ai/dsh-client-ui-workspace` 提供，
+   那个包 inject 了十余个包、在启动顺序里很晚才 `provide`，所以本插件 `apply` 时 `ctx.get('uiWorkspace')`
+   通常是 `undefined`。必须在**点击时现取**（并用 `try/catch` 包住，provider 卸载后 `ctx.get` 会抛）。
+   踩过：缓存写法让所有行静默点不动，而数据/配色/计数全正常，冒烟全绿 —— 因为探针把 `openSession`
+   当 prop 直接传给组件，绕过了插件自己的 inject face。改这块必须同时跑走注入面的断言（smoke 里有 4 条）。
+8. **Host 半边保持空**：不要为了「方便」加工具 / 路由 / 状态。那会把纯客户端插件变成 Host 插件，
    生效条件、权限、验证与文档全要重写。
-8. **样式只用主题 token**（`--dsw-alias-*`），不写死品牌色；坞在正常流里，已经没有硬编码的坐标与阴影。
+9. **样式只用主题 token**（`--dsw-alias-*`），不写死品牌色；坞在正常流里，已经没有硬编码的坐标与阴影。
    不 import 官方 client 包（如 primitives），控件按宿主样式手写。
-9. **无构建、无依赖、无 JSX**：`client.js` 是手写 ESM bundle，用 `React.createElement`（`h`）。
-10. **安装 target 必须指到 `running-sessions-float/` 子目录**（仓库根没有 `package.json`）；不要手写
+10. **无构建、无依赖、无 JSX**：`client.js` 是手写 ESM bundle，用 `React.createElement`（`h`）。
+11. **安装 target 必须指到 `running-sessions-float/` 子目录**（仓库根没有 `package.json`）；不要手写
     profile 的 `package.json` / patch 文件；装 / 卸只走插件页或 `plugin_manager`。
 
 ## 已知设计（不是 bug）
@@ -148,6 +154,8 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 - 「已完成」只覆盖**主视图之外**的结束（官方在会话是主视图时清 `completionUnread`），而且只能靠打开会话清除 ——
   坞不做「全部已读」按钮，那要 Host 或官方接口，越过只读边界。只剩「已完成」时坞头圆点静止（`rsf-settled`），
   不再脉冲假装有任务在跑。
+- 点击导航依赖**运行时才存在的** `uiWorkspace`：它在 `apply` 时通常还没挂，所以每次都现取；服务真缺席时点击是
+  no-op（不报错）。取舍见 IMPLEMENTATION「服务注入的时机」。
 - 空态仍留一行无边框细字 —— 保留固定座位，避免整块消失。
 - 没有设置项 / 开关 / 快捷键 —— 装了就一直在，不想看只能卸载。
 
@@ -158,7 +166,7 @@ README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent
 ```bash
 node --check running-sessions-float/client.js
 node --check running-sessions-float/index.js
-node test/smoke.mjs   # 38 项，必须 ALL PASS
+node test/smoke.mjs   # 42 项，必须 ALL PASS
 ```
 
 命令行证明不了的部分（位置、遮挡、主题、悬停、语言切换）照 README 的浏览器打勾清单人工核；

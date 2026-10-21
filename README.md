@@ -237,13 +237,13 @@ running-sessions-float/                 ← 仓库根（不是包）
 ├─ README.md
 ├─ IMPLEMENTATION.md
 ├─ AGENTS.md
-├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（38 项）
+├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（42 项）
 ├─ .agents/index.json                   ← 架构扫描状态：模块清单 / 覆盖率 / 缺口
 └─ running-sessions-float/              ← 包体（安装 target）
    ├─ package.json                      # name / version / exports / files / dsh.bundle + dsh.client
    ├─ cordis.patch.yml                  # insert 一行插件入口
    ├─ index.js                          # Host 半边：export function apply() {}（8 行）
-   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（465 行）
+   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（477 行）
    ├─ locale/en.json                    # 插件页元数据（meta.title / meta.description）
    ├─ locale/zh.json                    # 同上，中文
    ├─ AGENTS.md                         # 模块级文档（职责 / 接口 / 数据形状 / FAQ）
@@ -255,16 +255,16 @@ running-sessions-float/                 ← 仓库根（不是包）
 | `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
 | `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@local/running-sessions-float` |
 | `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
-| `running-sessions-float/client.js` | 465 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
+| `running-sessions-float/client.js` | 477 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
 | `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
 | `running-sessions-float/icon.svg` | 11 | 插件图标 |
 | `AGENTS.md` | — | 给 agent 的命令、硬约束与改动连带项 |
-| `test/smoke.mjs` | 287 | 无 DOM 组件冒烟 + 包契约（38 项） |
+| `test/smoke.mjs` | 324 | 无 DOM 组件冒烟 + 包契约（42 项） |
 
 ### 两侧注入
 
 - **Host**：无 `inject`。`index.js` 只导出 `apply()`，不依赖任何 Host 服务。
-- **Client**（`client.js` 模块返回）：`inject: ['slots']`；`apply(ctx)` 里 `ctx.get('locale')`、`ctx.get('uiWorkspace')`、`ctx.slots.inject('sidebar.footer.action', ...)`。
+- **Client**（`client.js` 模块返回）：`inject: ['slots']`；`apply(ctx)` 里 `ctx.get('locale')` 与 `ctx.slots.inject('sidebar.footer.action', ...)`；`uiWorkspace` **不在这里取**，而是每次点击时现取（它由启动更晚的 workspace 插件补挂）。
 - **加载顺序**（`package.json` → `dsh.client.inject`）：`@deepseek-ai/dsh-client-ui-session` —— 它提供 `useSessions` / `useSessionStatus` 这两个全局标准 props，必须排在它之后激活。
 - **启动加载**：`immediately: true`，启动时就加载，不等打开某个面板。
 
@@ -274,7 +274,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 |---|---|---|---:|---|---|---|---|
 | `sidebar.footer.action` | list 槽位 | `running-sessions-float` | -10 | 未设 | 无（该槽没有 patterns） | 无条件 | 唯一 UI 注册；list 槽按 order 升序渲染，负值排在官方动作（默认 0）之前 |
 | locale | 字典命名空间 | `local.runningSessions` | — | — | — | locale 服务存在时 | 注册 en / zh 各 8 个 key（`title` `running` `approval` `plan` `answer` `done` `empty` `openHint`）；不在时用内置中文 |
-| `uiWorkspace` | 可选服务 | — | — | — | — | 存在时 | 点击行时调用 `openSession`；缺失则点击无动作 |
+| `uiWorkspace` | 可选服务 | — | — | — | — | 每次点击 | 点击时才 `ctx.get('uiWorkspace')` 并调 `openSession`；**不要在 `apply` 时缓存** —— 它由启动更晚的插件提供，缓存到的是 `undefined`；缺失则点击无动作 |
 
 不占 `sidebar` / `sidebar.workspaces.*` / `composer.*` 等其它槽位；`sidebar.footer.action` 是本插件唯一的 UI 注册。
 
@@ -304,6 +304,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 会话跑完了坞里却没有「已完成」行 | 那个会话当时是主视图（官方会把 `completionUnread` 清掉），或它已归档 / 被删 | 属预期：主视图里跑完不算「未读」 |
 | 「已完成」行点了也不消失 | 点击只切视图，官方在会话成为主视图后才清标记；状态快照可能滞后一拍 | 等一拍；仍不消失就刷新页面确认是不是旧 bundle |
 | 点行没反应 | 部署里没有 `uiWorkspace`（无工作区 UI），或会话已删 | 属于降级行为；换有工作区的部署 |
+| 所有行都点不动、但坞数据显示正常 | 旧版把 `uiWorkspace` 缓存在 `apply` 里，而它由启动更晚的插件补挂 → 缓存永远是 `undefined` | 已修：改成点击时现取；更新到含该修复的版本 |
 | 改了 `client.js` 没变化 | 装的是副本，或部署没挂 `client-hmr` | `link:` 装等推送，没挂就重启 Harness；副本重新安装 |
 | 文案不跟随界面语言 | locale 服务不可用，回落中文 | 检查界面语言设置；locale 服务由官方加载 |
 | 坞把上方会话列表挤短了 | 坞在底部动作区里占的是真实布局，不是浮层 | 预期行为：坞展开时列表相应变短；行多时坞内滚动，最高 200px |
@@ -333,12 +334,12 @@ console.log(pkg.dsh.bundle.patch, pkg.dsh.client.inject);
 # 预期：@local/running-sessions-float 0.1.0
 #       ./cordis.patch.yml [ '@deepseek-ai/dsh-client-ui-session' ]
 
-# 3) 组件行为 + 包契约（无 DOM，38 项）
+# 3) 组件行为 + 包契约（无 DOM，42 项）
 node test/smoke.mjs
-# 预期：38 行 PASS + ALL PASS
+# 预期：42 行 PASS + ALL PASS
 ```
 
-`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **30 项行为**：过滤（blank / subagent / 空闲）、排序、五种行状态（运行中 / 等待审批 / 计划待审 / 等待回答 / 已完成）、计数徽标、点击转发（含「已完成」行）、头部状态点（活跃脉冲 / 只剩已完成时静止 / 空态灰点）、空态、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数 / 只剩已完成时静止）、CSS 里没有 `position: fixed`（坞不再浮层）、「已完成」配色只用主题 token、挂载时把底部动作行改成可换行（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。30 + 8 = 38，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
+`test/smoke.mjs` 用 Node 的 `vm` 加载 `client.js`，用 React 桩渲染组件，覆盖 **34 项行为**：过滤（blank / subagent / 空闲）、排序、五种行状态（运行中 / 等待审批 / 计划待审 / 等待回答 / 已完成）、计数徽标、点击转发（含「已完成」行、含**走 inject face 的包装函数**：注入的 `openSession` 必须真能经 `uiWorkspace` 跳转、`apply` 时不许缓存它、晚到的 `uiWorkspace` 仍可用、缺失时不抛异常）、头部状态点（活跃脉冲 / 只剩已完成时静止 / 空态灰点）、空态、locale 回落、无 `openSession` 时不抛异常、en 字典注册、窄栏圆点（有 / 无计数 / 只剩已完成时静止）、CSS 里没有 `position: fixed`（坞不再浮层）、「已完成」配色只用主题 token、挂载时把底部动作行改成可换行（锚点是该行唯一子元素时也要改）、卸载时还原；另加 **8 项包契约**：client id 与包名一致、注册在 `sidebar.footer.action`、order 为负（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、zh / en 字典键完全一致、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。34 + 8 = 42，与 `node test/smoke.mjs` 的 PASS 行数一致。样式与真实布局只能在浏览器看，见下一节。
 
 ### 只能在浏览器里看的（逐条打勾）
 
@@ -362,6 +363,7 @@ node test/smoke.mjs
 - [ ] 坞下面「用量统计」「会话管理」这些原有入口都还在，且各占一行。
 - [ ] 在别的页签 / 主视图之外让一个会话跑完：坞里多出一行灰字「已完成」，头部绿点变成静止的小圆点（不再脉冲）。
 - [ ] 点那行「已完成」进去看，再回来：该行消失，计数 -1。
+- [ ] 任何一行（运行中 / 待处理 / 已完成）点下去都能切到对应会话 —— 三种状态走的是同一个点击路径。
 - [ ] 窄栏（56px）时只剩「已完成」会话：圆片里仍是计数，圆点静止、不脉冲。
 
 ## 已知边界
@@ -395,4 +397,4 @@ node test/smoke.mjs
 | [index.js](running-sessions-float/index.js) | Host 半边（空 `apply()`） |
 | [package.json](running-sessions-float/package.json) | 包声明：bundle patch + client 声明 |
 | [cordis.patch.yml](running-sessions-float/cordis.patch.yml) | 装配行 |
-| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（38 项） |
+| [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（42 项） |

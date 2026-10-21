@@ -163,9 +163,41 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 
 **没有 `client-hmr` 的部署是另一回事**：Host 的 `clientModules` 只在包注册时读一次字节，之后没人调 `rebuilt()`；刷新页面拿到的仍是内存里的旧 bundle —— 必须重启（或重新安装）才会重读。装的是副本时，改仓库代码根本没碰到被监视的文件，得重新安装。
 
+## 服务注入的时机（踩过的坑）
+
+`uiWorkspace` 不是本插件声明的 inject 依赖，而是**可选服务**，并且它属于 `@deepseek-ai/dsh-client-ui-workspace` —— 那个包自己 inject 了连接、session controller、workspace controller、layout、renderer、sidebar 等十余个包，因此在启动顺序里很晚才 `provide('uiWorkspace')`。
+
+`ctx.get(name, strict = true)` 的 strict 语义是「只返回**当前已激活**的 fiber 提供的实现」，所以在本插件 `apply` 执行的那一刻取 `uiWorkspace` 通常拿到 `undefined`。
+
+早先的写法把这次取值缓存在闭包里：
+
+```js
+apply(ctx) {
+  const uiWorkspace = ctx.get('uiWorkspace');   // ← 此刻通常是 undefined
+  ...
+  openSession: id => { uiWorkspace?.openSession(id); }
+}
+```
+
+后果是所有行点击静默失效，而坞的数据、配色、计数全都正常 —— 看起来像「只有某个状态点不动」，其实三种状态一条都点不动。
+
+正确写法是**每次点击现取**，并把取值包在 `try/catch` 里（provider 卸载后 `ctx.get` 会抛，不该让一次点击炸掉渲染）：
+
+```js
+openSession: sessionId => {
+  let uiWorkspace;
+  try { uiWorkspace = ctx.get('uiWorkspace'); } catch { uiWorkspace = undefined; }
+  if (uiWorkspace && typeof uiWorkspace.openSession === 'function') uiWorkspace.openSession(sessionId);
+}
+```
+
+代价：每次点击多一次 `ctx.get`（一次 Map 查表）。这个代价远小于「整块坞看起来正常但点不动」。
+
+**为什么探针没抓到**：所有点击断言都是 `render(component, ..., { openSession })` 直接把函数当 prop 传进去，测的是组件的 `onClick` 转发，**不是**插件注册的 `inject()` 返回的那个包装函数。现已补 4 条走注入面的断言，并做过变异验证（把缓存写法改回去 → 2 项 FAIL）。
+
 ## 降级路径
 
-- `uiWorkspace` 不存在：`openSession` 是 `undefined`，点击处理里 `if (openSession)` 直接跳过；按钮仍可聚焦、可点，只是不导航。已完成的提醒行也因此点不掉，只能等官方下一轮 reconcile。
+- `uiWorkspace` 不存在：点击时现取不到服务，`openSession` 什么都不做；按钮仍可聚焦、可点，只是不导航。已完成的提醒行也因此点不掉，只能等官方下一轮 reconcile。
 - `locale` 不存在或不完整：`register` / `subscribe` / `bind` 都先做 `typeof` 检查；组件始终能渲染。
 - 状态快照里没有某个会话：`running` 用列表快照的 `summary.running` 兜底，`completionUnread` 则一律按 `false`（没有可信来源就不显示「已完成」）；都没有就不列。
 - `wide === false`（侧栏折叠成 56px 窄栏）：不渲染列表，只渲染 36px 圆片 + 计数；`aria-label` 写「进行中 · N」，空态写「暂无进行中」。这是唯一按槽位 owner props 分叉的地方，圆片不可点（槽位没给展开侧栏的回调）。
@@ -183,6 +215,7 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 - 头部状态点：有 running / pending 时是 `rsf-pulse`，只剩「已完成」时是 `rsf-pulse rsf-settled`（含窄栏圆片）；
 - 计数徽标、空态类名与文案、空态无计数；
 - 点击把 id 转发给 `openSession`；
+- **注入面本身可用**（这条是补漏）：直接调用 `spec.inject().openSession`，验证它经 `uiWorkspace` 真能跳转、`apply` 时没有缓存服务、晚到的 `uiWorkspace` 补挂后仍然有效、服务缺失时不抛异常。此前所有点击断言都是把 `openSession` 作为 prop 直接传给组件，绕过了插件自己的包装函数，于是「`apply` 时缓存到 `undefined`」这个 bug 能带着 38 项全绿溜过去；探针改成走注入面后再把旧实现改回去，会看到 2 项 FAIL（已实测）；
 - 没有 locale 服务时回落中文；
 - 没有 `openSession` 时点击不抛异常；
 - en 字典确实注册；
@@ -194,4 +227,4 @@ Web 组合挂了 `client-hmr`。它每 500ms 对图里每一行的 bundle 做一
 `sidebar.footer.action`、`order < 0`（排在官方动作之前）、patch 行指向本包、`files` 含运行文件、
 zh / en 键集合相同、源码里每个 `t('key')` 两本字典都有、client bundle 只 `require('react')`。
 
-30 + 8 = 38 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。
+34 + 8 = 42 项。样式、布局、遮挡、悬停提示、主题色这些没有 DOM 断言环境，放在 README 的浏览器打勾清单里，不在这里假装能测。

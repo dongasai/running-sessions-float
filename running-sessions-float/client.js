@@ -436,7 +436,6 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
         if (locale && typeof locale.register === 'function') {
           ctx.effect(() => locale.register(NS, DICTS), 'running-sessions-float: dictionaries');
         }
-        const uiWorkspace = ctx.get('uiWorkspace');
         ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
           name: 'sidebar.footer.action',
           id: 'running-sessions-float',
@@ -453,6 +452,19 @@ div:has(> [data-slot="sidebar.footer.action"] > .rsf-dock) {
           inject: () => ({
             locale,
             openSession: sessionId => {
+              // Resolve the navigation service at click time, not at apply time.
+              // `uiWorkspace` is provided by the workspace plugin very late in the
+              // boot order (it needs connection, session controller, layout and the
+              // renderer), so the one lookup at apply time is usually `undefined` —
+              // every row would then be silently dead. `ctx.get` is an optional
+              // lookup the sandbox facade allows, and it throws only after the
+              // provider unloads; catch that so a dead service cannot break render.
+              let uiWorkspace;
+              try {
+                uiWorkspace = ctx.get('uiWorkspace');
+              } catch {
+                uiWorkspace = undefined;
+              }
               if (uiWorkspace && typeof uiWorkspace.openSession === 'function') {
                 uiWorkspace.openSession(sessionId);
               }

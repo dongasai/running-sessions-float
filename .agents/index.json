@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T11:45:00+0800",
+  "generatedAt": "2026-10-21T12:02:00+0800",
   "generator": "init-architect",
   "root": {
     "name": "running-sessions-float",
@@ -38,7 +38,7 @@
         "slot sidebar.footer.action: id=running-sessions-float, order=-10, scope=root, no patterns, owner props { wide }; 挂载时 promoteFooterContainer 给该行加 flex-wrap:wrap（含 :has() 兜底；不能改成 column，100% 基准会按高度算），否则会挤掉官方入口",
         "locale namespace local.runningSessions (en/zh, 8 keys each)",
         "retention: running || pendingInteraction || completionUnread (done-unread rows show 已完成 in a dim tone; header dot settles to rsf-settled when only those remain)",
-        "inject face { locale, openSession }; owner props { wide } → wide=false 渲染 36px 计数圆片",
+        "inject face { locale, openSession }; owner props { wide } → wide=false 渲染 36px 计数圆片; openSession 每次点击现取 ctx.get('uiWorkspace')（try/catch），不许在 apply 时缓存 —— 该服务由启动更晚的 dsh-client-ui-workspace 提供",
         "data in: useSessions / useSessionStatus slot props",
         "side effect out: uiWorkspace.openSession(id)"
       ],
@@ -50,7 +50,7 @@
       ],
       "tests": ["test/smoke.mjs"],
       "importantPaths": [
-        "running-sessions-float/client.js (465 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
+        "running-sessions-float/client.js (477 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
         "running-sessions-float/index.js (8 lines: empty apply)",
         "running-sessions-float/package.json",
         "running-sessions-float/cordis.patch.yml"
@@ -72,13 +72,13 @@
     {
       "name": "test",
       "path": "test/",
-      "role": "无 DOM 冒烟 + 包契约：vm 加载 client.js，React 桩渲染，断言 30 项行为 + 8 项契约",
+      "role": "无 DOM 冒烟 + 包契约：vm 加载 client.js，React 桩渲染，断言 34 项行为 + 8 项契约（含走 inject face 的 openSession 导航断言）",
       "language": "JavaScript (ESM, node:test-free, zero dependency)",
       "entry": ["test/smoke.mjs"],
-      "interfaces": ["CLI: node test/smoke.mjs (exit 0 = ALL PASS, 38 checks)"],
+      "interfaces": ["CLI: node test/smoke.mjs (exit 0 = ALL PASS, 42 checks)"],
       "config": [],
       "tests": ["test/smoke.mjs"],
-      "importantPaths": ["test/smoke.mjs (287 lines)"],
+      "importantPaths": ["test/smoke.mjs (324 lines)"],
       "doc": "AGENTS.md#验证规范 (no dedicated module doc by design)",
       "scannedFiles": ["test/smoke.mjs"],
       "pathOnlyFiles": [],
