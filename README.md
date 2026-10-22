@@ -1,4 +1,4 @@
-# @local/running-sessions-float
+# @dongasai/running-sessions-float
 
 在 DSH Web GUI 左侧栏底部的动作区里放一块「进行中」坞：把**正在跑**、**卡在等你处理**和**刚跑完还没看过**的会话收成一张小列表，点一行就把主视图切过去；没有这类会话时收成一行细字，只留「暂无进行中」。坞是布局里的真实一块，排在这排动作的最上面，**不浮在会话列表上**。
 
@@ -58,14 +58,14 @@ dsh plugin --profile web add github:dongasai/running-sessions-float
 # 或
 dsh plugin --profile web add git+https://github.com/dongasai/running-sessions-float.git
 # 钉版本（URL 后加 #<tag>，锁到某个发布版本来复现问题 / 稳定使用）
-dsh plugin --profile web add github:dongasai/running-sessions-float#0.1
+dsh plugin --profile web add github:dongasai/running-sessions-float#0.2
 ```
 
 `dsh plugin --profile <name> <pnpm args>` 把参数转发给该 profile 目录里的 pnpm。装进来的是**副本**：之后改本仓库代码不影响已装的副本（想边改边用就走方式三）。
 
 - `--profile` **必填**（不写直接报 `required option '--profile <name> not specified'`）。
 - **必须带 `git+` 或 `github:` 前缀**。`git@github.com:owner/repo.git` 这种 scp 写法不会被认成 git spec，pnpm 会把它当路径，装出一条指向不存在目录的 `link:` 死链。
-- **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.1`），tag / 分支 / commit 都行；本仓库当前 tag 是 `0.1`，对应 `package.json` 的 `0.1.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。
+- **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.2`），tag / 分支 / commit 都行；本仓库当前 tag 是 `0.2`，对应 `package.json` 的 `0.2.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。**`0.1` 及更早的 tag 里包名还是 `@local/running-sessions-float`**，钉它们装不出当前这套。
 - pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器 bundle，由 Host 直接读盘发出），不会遇到。
 
 **实测：这组命令对本仓库装不出可用副本。** 仓库根没有 `package.json`，pnpm 只认根目录那个包，装进来的依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，`dsh plugin add` 随后报 `cannot resolve profile bundle "running-sessions-float#0.1"`。要真装，走方式三，或先 clone + checkout tag 再 `link:`（见下）。
@@ -85,16 +85,40 @@ dsh plugin --profile web add "link:$(realpath running-sessions-float)"
 
 #### 钉版本：克隆 + checkout tag
 
-tag `0.1` 真实存在，对应 `package.json` 的 `0.1.0`。`#0.1` 这种 URL 钉法实测装不出可用副本（见方式二），所以钉版本这样装：
+tag `0.2` 真实存在，对应 `package.json` 的 `0.2.0`。`#0.2` 这种 URL 钉法实测装不出可用副本（见方式二），所以钉版本这样装：
 
 ```bash
 git clone https://github.com/dongasai/running-sessions-float.git
 cd running-sessions-float
-git checkout 0.1
+git checkout 0.2
 dsh plugin --profile web add "link:$(realpath running-sessions-float)"
 ```
 
 clone 下来的目录里还有一层同名子目录，`realpath` 要指到里面那层。
+
+#### 包名与旧版本
+
+包名是 **`@dongasai/running-sessions-float`**（2026-10-23 从 `@local/running-sessions-float` 改过来，与本机其它自研插件同一 scope）。改名是**破坏性**的：
+
+- `0.1` 及更早的 tag 与 main 上 2026-10-23 之前的提交里，`package.json`、`cordis.patch.yml`、`client.js` 的 client id 都还是 `@local/...`；装那些版本得到的插件页条目与装配 id 都是旧名。
+- 已装旧名的 profile 不会自动迁移：依赖名、`dsh.profile.bundles` 选中项、`node_modules/@local/running-sessions-float` 软链都指向旧名。按下面「换包名时怎么升」重装一次即可。
+
+换包名时怎么升（本机实测流程）：
+
+```bash
+# 1) 移除旧名（先卸再装，避免两个名字同时被装配）
+dsh plugin --profile web remove @local/running-sessions-float
+# 2) 用当前仓库装新名
+dsh plugin --profile web add "link:$(realpath running-sessions-float)"
+# 3) 确认依赖名、bundles 选中项、软链三处都换了
+grep -n running-sessions-float ~/.dsh/profiles/web/package.json
+ls -l ~/.dsh/profiles/web/node_modules/@dongasai/running-sessions-float
+# 4) 确认装配行（应显示 @dongasai/running-sessions-float）
+dsh --profile web --dump-config | grep -A2 running-sessions-float
+# 5) 重启正在跑的实例（插件行在启动时合成）
+```
+
+pnpm 移除链接包时不一定会清掉旧 `node_modules/@local/...` 软链 —— 那条孤立软链不在 loader entries 里、不会被加载，但要留意将来 `pnpm install` 的歧义。确认它指向本仓库这个包再删（`realpath` 核验后再 `rm`，别删成别的插件的链接）。
 
 #### 装完确认
 
@@ -107,9 +131,9 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 期望输出（本机实测）：
 
 ```yaml
-# == @local/running-sessions-float
+# == @dongasai/running-sessions-float
 - id: running-sessions-float
-  name: '@local/running-sessions-float'
+  name: '@dongasai/running-sessions-float'
 ```
 
 **运行中的实例要重启才会加载它**（插件行在启动时合成）。
@@ -119,7 +143,7 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 1. `--profile` 必填 —— 不写直接报 `error: required option '--profile <name>' not specified`。
 2. 只加依赖、没登记 `dsh.profile.bundles` = 装了不挂载 —— 命令行的 `dsh plugin add` 写的是依赖，挂载还取决于 `bundles`；实测清空 `bundles` 后 `--dump-config` 输出为空，所以装完必须用上面的命令验一遍。
 3. git spec 必须带 `github:` / `git+` 前缀 —— `git@github.com:owner/repo.git` 这种 scp 写法会被 pnpm 当成本地路径，装出一条指向不存在目录的 `link:` 死链。
-4. 钉版本的 tag 必须真实存在 —— 本仓库是 `0.1`（对应 `0.1.0`），但只能用「克隆 + checkout」，不能 URL 钉版本。
+4. 钉版本的 tag 必须真实存在 —— 本仓库是 `0.2`（对应 `0.2.0`）；`0.1` 及更早是旧包名 `@local/running-sessions-float`。只能用「克隆 + checkout」，不能 URL 钉版本。
 
 本仓库 `private: true`、未发布 npm，**没有 registry 装法**；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
 
@@ -152,7 +176,7 @@ Web 插件页：停用这个插件 → 移除。或让 Agent 执行：
 
 ```text
 action: remove_bundle
-target: @local/running-sessions-float
+target: @dongasai/running-sessions-float
 ```
 
 `remove_bundle` 会先取消 bundle 选中、再删包。**不要只跑 `pnpm remove`**：依赖没了、`dsh.profile.bundles` 里的选中项还在，下次装配会解析不到这个包。
@@ -253,7 +277,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 文件 | 行数 | 作用 |
 |---|---:|---|
 | `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
-| `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@local/running-sessions-float` |
+| `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@dongasai/running-sessions-float` |
 | `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
 | `running-sessions-float/client.js` | 477 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
 | `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
@@ -310,7 +334,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 坞把上方会话列表挤短了 | 坞在底部动作区里占的是真实布局，不是浮层 | 预期行为：坞展开时列表相应变短；行多时坞内滚动，最高 200px |
 | 用量统计 / 会话管理 不见了 | 坞没能给那行加 `flex-wrap: wrap`，不换行时全宽坞把兄弟入口挤出可视区 | 看控制台有没有 `closest` 报错；宿主改过 `data-slot` 锚点时改选择器 |
 | 卸载后仍被装配 | 只跑了 `pnpm remove`，没取消 bundle 选中 | 从插件页卸载，或用 `plugin_manager` 的 `remove_bundle`（先取消选中再删包） |
-| 按 `#0.1` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.1`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
+| 按 `#0.2` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.2`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
 | 坞里的行数比侧栏会话少 | 空白会话与 subagent 会话被刻意过滤 | 预期行为；去侧栏对应工作区看它们 |
 | 改了 `locale/*.json` 文案没变 | 那两份只放插件页 meta，坞内文案在 `client.js` 的 `DICTS` | 改 `DICTS` 后重新装；插件页 meta 要重新装配才刷新 |
 
@@ -331,7 +355,7 @@ const pkg = JSON.parse(fs.readFileSync(dir + "/package.json", "utf8"));
 console.log(pkg.name, pkg.version);
 console.log(pkg.dsh.bundle.patch, pkg.dsh.client.inject);
 '
-# 预期：@local/running-sessions-float 0.1.0
+# 预期：@dongasai/running-sessions-float 0.2.0
 #       ./cordis.patch.yml [ '@deepseek-ai/dsh-client-ui-session' ]
 
 # 3) 组件行为 + 包契约（无 DOM，42 项）

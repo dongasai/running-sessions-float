@@ -14,7 +14,7 @@
  * snapshots maintained elsewhere.
  */
 window.__ModuleLoader__.load({
-  id: '@local/running-sessions-float',
+  id: '@dongasai/running-sessions-float',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

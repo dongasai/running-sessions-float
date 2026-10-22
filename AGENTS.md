@@ -18,10 +18,11 @@
 | 2026-10-20 | 共存修正：坞挂载时给 `sidebar.footer.action` 那一行加 `flex-wrap: wrap`（`promoteFooterContainer`，另有等价 `:has()` 规则管首帧），生态里各入口的 `flex: 0 0 100%` 于是各占一行，用量统计 / 会话管理 / 搜索都排在坞下面。坞最高从 `min(46vh, 380px)` 收到 `min(28vh, 200px)`。**`flex-direction: column` 是错的**：列里 100% 按高度算，搜索入口涨成 256×139.95 把别人顶出屏幕（已在无头 Chrome 复现）。同步 `client.js`（368 → 429 行）、smoke（27 → 31 项）、README、IMPLEMENTATION、包内 AGENTS 与 `.agents/index.json`。 |
 | 2026-10-21 | 完成未读：把 `useSessionStatus` 的第三个字段 `completionUnread` 纳入坞 —— 在主视图之外跑完的会话不再直接消失，行尾显示灰字「已完成」（与官方 `status.completed` 同词），显示优先级 待处理 > 运行中 > 已完成；坞头状态点在「只剩已完成」时换成静止的 6px 圆点（`rsf-settled`）。同步 `client.js`（429 → 465 行）、smoke（31 → 38 项）、README、IMPLEMENTATION、两份 AGENTS 与 `.agents/index.json`。 |
 | 2026-10-21 | 修复点击导航：`uiWorkspace` 早先在 `apply` 时被一次性取值缓存，而它由启动更晚的 `dsh-client-ui-workspace` 提供，缓存到的是 `undefined` —— 于是**所有行点击都静默失效**（用户实测「已完成不能点击跳转」）。改成每次点击现取 + `try/catch`。冒烟补 4 条走 **inject face** 的断言（此前点击断言只测 prop 转发，绕过了插件自己的包装函数），并做过变异验证。`client.js` 465 → 477 行，smoke 38 → 42 项。 |
+| 2026-10-23 | 包名改为 `@dongasai/running-sessions-float`（原 `@local/running-sessions-float`），与本机其它自研插件同 scope；版本抬到 `0.2.0`。**四处必须同步**：`package.json` 的 `name`、`cordis.patch.yml` 的 `name`、`client.js` 顶层的 `load({ id })`（smoke 有「client id 与包名一致」断言）、文档。已按「先 remove 旧名 → 再 add 新名」重装本机 profile：依赖名、`dsh.profile.bundles`、`node_modules/@dongasai/running-sessions-float` 软链均换新，`--dump-config` 显示新包名；旧 `node_modules/@local/running-sessions-float` 孤立软链核验目标后删除。旧 tag `0.1` 仍是旧名，README 已注明。 |
 
 ## 项目是什么
 
-`@local/running-sessions-float` —— DSH 插件，一个包两半，但 **Host 半边是空的**：
+`@dongasai/running-sessions-float` —— DSH 插件，一个包两半，但 **Host 半边是空的**：
 
 - **Host 半边 [index.js](running-sessions-float/index.js)**：只有一个空 `apply()`，只给 bundle 一个挂载入口；
   无工具、无路由、无状态、无配置。
@@ -40,15 +41,16 @@
 | 校验 manifest | `node -e 'const p=require("./running-sessions-float/package.json");console.log(p.name,p.version,p.dsh)'` |
 | 校验 patch | `python3 -c "import yaml;print(yaml.safe_load(open('running-sessions-float/cordis.patch.yml')))"` |
 | 装进 profile（宿主 shell） | `dsh plugin --profile web add "link:$(realpath running-sessions-float)"` |
-| 卸载 | `plugin_manager` → `remove_bundle`，target `@local/running-sessions-float` |
+| 卸载 | `plugin_manager` → `remove_bundle`，target `@dongasai/running-sessions-float`（旧装法用过 `@local/running-sessions-float`，见 README「包名与旧版本」） |
 | 看装配结果（宿主 shell） | `dsh --profile web --dump-config \| grep -A2 running-sessions-float` |
 
 ⚠️ `--dump-config` 装配前会写 profile 根文件 `cordis.yml`；在 `workspace-write` 沙箱里会 EROFS。
 沙箱内用只读替代：`grep -n running-sessions-float ~/.dsh/profiles/web/package.json` 与
-`ls -l ~/.dsh/profiles/web/node_modules/@local/`。
+`ls -l ~/.dsh/profiles/web/node_modules/@dongasai/`（包名 2026-10-23 从 `@local/` 改成 `@dongasai/`，
+与本机其它自研插件同一 scope；旧 `@local/` 链接目录要清掉）。
 
 装的是 `link:`：profile 的 `package.json` 记
-`"@local/running-sessions-float": "link:<仓库绝对路径>/running-sessions-float"`。
+`"@dongasai/running-sessions-float": "link:<仓库绝对路径>/running-sessions-float"`。
 
 **改哪一半、怎么生效**：
 
@@ -87,7 +89,7 @@ graph TD
 ```text
 client.js        浏览器半边（477 行）：DICTS / promoteFooterContainer / CSS / useTranslator / pendingLabel / RunningSessionsDock / apply
 index.js         Host 半边：8 行，空 apply()
-cordis.patch.yml insert id=running-sessions-float → @local/running-sessions-float
+cordis.patch.yml insert id=running-sessions-float → @dongasai/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
 AGENTS.md（包内）模块级文档：职责 / 接口 / 数据形状 / FAQ（不进 npm files 白名单）

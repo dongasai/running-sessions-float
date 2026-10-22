@@ -1,6 +1,6 @@
 {
-  "name": "@local/running-sessions-float",
-  "version": "0.1.0",
+  "name": "@dongasai/running-sessions-float",
+  "version": "0.2.0",
   "private": true,
   "description": "Sidebar-foot dock that lists the sessions currently in progress.",
   "type": "module",

@@ -21,7 +21,7 @@ DSH Web 插件的**可安装单元**：一个包两半，Host 半边为空，浏
 | 文件 | 作用 |
 |---|---|
 | `package.json` | `exports["."] = ./index.js`、`exports["./client"] = ./client.js`；`dsh.bundle.patch` 指 patch，`dsh.client` 声明 web + 启动即加载 + 依赖 session UI 包 |
-| `cordis.patch.yml` | `insert` 一行：id `running-sessions-float` → `@local/running-sessions-float` |
+| `cordis.patch.yml` | `insert` 一行：id `running-sessions-float` → `@dongasai/running-sessions-float` |
 | `index.js` | Host 半边，导出空 `apply()`（8 行），只给 bundle 一个挂载入口 |
 | `client.js` | 浏览器半边（477 行）：`DICTS` / `promoteFooterContainer` / `CSS` / `useTranslator` / `pendingLabel` / `RunningSessionsDock` / `apply` |
 
@@ -133,3 +133,4 @@ node test/smoke.mjs          # 42 项，必须 ALL PASS
 | 2026-10-20 | 共存修正：挂载时 `promoteFooterContainer` 给槽位所在那一行加 `flex-wrap: wrap`（锚点是该行唯一子元素时也生效，卸载还原），各入口的 `flex: 0 0 100%` 变成「各占一行」，官方入口排在坞下面；改成 column 会让搜索入口涨满高度（已复现）。坞最高 200px。行数 368 → 429，断言 27 → 31。 |
 | 2026-10-21 | 完成未读：`completionUnread` 从「未使用」改为第三个保留条件，行尾灰字「已完成」（`tone: 'done'`，`--dsw-alias-label-tertiary`），优先级 待处理 > 运行中 > 已完成；`rows` 多一个 `live` 字段，坞头圆点在只剩「已完成」时切到 `rsf-settled`（静止 6px）。行数 429 → 465，断言 31 → 38。 |
 | 2026-10-21 | 修复点击导航：`uiWorkspace` 由启动更晚的 `@deepseek-ai/dsh-client-ui-workspace` 提供，早先 `apply` 时一次性取值缓存到 `undefined`，导致所有行点击静默失效（含「已完成」行）。改为点击时现取 + `try/catch`。smoke 补 4 条走 inject face 的断言（原先只测 prop 转发），已做变异验证（改回缓存 → 2 项 FAIL）。行数 465 → 477，断言 38 → 42。 |
+| 2026-10-23 | 包名 `@local/running-sessions-float` → `@dongasai/running-sessions-float`，版本 `0.1.0` → `0.2.0`。改动三处代码面：`package.json` `name`、`cordis.patch.yml` `name`、`client.js` 的 `load({ id })`（三者必须一致；smoke 的「client id 与包名一致」断言会红）。已重装本机 profile，旧名依赖/bundles/软链已清。 |

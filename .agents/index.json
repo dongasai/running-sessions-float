@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-10-21T12:02:00+0800",
+  "generatedAt": "2026-10-23T01:30:00+0800",
   "generator": "init-architect",
   "root": {
     "name": "running-sessions-float",
-    "packageName": "@local/running-sessions-float",
+    "packageName": "@dongasai/running-sessions-float",
     "versionSource": "running-sessions-float/package.json",
     "kind": "single-plugin repository (package lives in a subdirectory; repo root is not installable)",
     "stack": ["JavaScript (ESM)", "Node 18+ (vm for tests)", "DSH client bundle", "CSS (theme tokens)"],
