@@ -23,6 +23,7 @@
 | 2026-10-21 | 完成未读：把 `useSessionStatus` 的第三个字段 `completionUnread` 纳入坞 —— 在主视图之外跑完的会话不再直接消失，行尾显示灰字「已完成」（与官方 `status.completed` 同词），显示优先级 待处理 > 运行中 > 已完成；坞头状态点在「只剩已完成」时换成静止的 6px 圆点（`rsf-settled`）。同步 `client.js`（429 → 465 行）、smoke（31 → 38 项）、README、IMPLEMENTATION、两份 AGENTS 与 `.agents/index.json`。 |
 | 2026-10-21 | 修复点击导航：`uiWorkspace` 早先在 `apply` 时被一次性取值缓存，而它由启动更晚的 `dsh-client-ui-workspace` 提供，缓存到的是 `undefined` —— 于是**所有行点击都静默失效**（用户实测「已完成不能点击跳转」）。改成每次点击现取 + `try/catch`。冒烟补 4 条走 **inject face** 的断言（此前点击断言只测 prop 转发，绕过了插件自己的包装函数），并做过变异验证。`client.js` 465 → 477 行，smoke 38 → 42 项。 |
 | 2026-10-23 | 包名改为 `@dongasai/running-sessions-float`（原 `@local/running-sessions-float`），与本机其它自研插件同 scope；版本抬到 `0.2.0`。**四处必须同步**：`package.json` 的 `name`、`cordis.patch.yml` 的 `name`、`client.js` 顶层的 `load({ id })`（smoke 有「client id 与包名一致」断言）、文档。已按「先 remove 旧名 → 再 add 新名」重装本机 profile：依赖名、`dsh.profile.bundles`、`node_modules/@dongasai/running-sessions-float` 软链均换新，`--dump-config` 显示新包名；旧 `node_modules/@local/running-sessions-float` 孤立软链核验目标后删除。旧 tag `0.1` 仍是旧名，README 已注明。 |
+| 2026-10-25 | README 顶部加预览截图 [image/1.png](image/1.png)（侧栏底部实拍：坞里一行「运行中」，下面是搜索 / 用量统计 / 会话与工作区 / 设置），同步「结构」树、「相关文件」表与本文件「文件地图」；图是文档资产，不进 `files` 白名单。 |
 | 2026-10-25 | **目录结构归位**：删掉多出来的一层 `running-sessions-float/` 子目录，包文件（`package.json` / `index.js` / `client.js` / `cordis.patch.yml` / `locale/` / `icon.svg`）用 `git mv` 移到仓库根，仓库根即安装 target；模块级 AGENTS 内容并入本文件后删除，`.agents/index.json` 从「两个模块」改成单模块。动机：`github:` / `git+` 直装与 `#tag` 钉版本在根目录没有 `package.json` 时全部失败（依赖名落成 `running-sessions-float#0.1 0.0.0`，随后 `cannot resolve profile bundle`）。版本抬到 `0.3.0`、打 tag `0.3`；本机 profile 的 `link:` 改指仓库根。smoke 路径改 `join(here, '..')`，断言数不变（42）。 |
 
 ## 项目是什么
@@ -95,6 +96,7 @@ index.js         Host 半边：8 行，空 apply()
 cordis.patch.yml insert id=running-sessions-float → @dongasai/running-sessions-float
 package.json     dsh.bundle.patch + dsh.client { platform: web, immediately: true, inject: [session UI] }
 locale/*.json    只有 meta.title / meta.description（插件页）
+image/1.png      README 顶部的预览截图（文档资产，不进 npm files）
 test/smoke.mjs   vm + React 桩渲染 + 包契约，42 项
 .agents/index.json 扫描状态：模块清单 / 覆盖率 / 缺口 / 续扫入口
 README.md        怎么用；IMPLEMENTATION.md 为什么；本文件 给 agent

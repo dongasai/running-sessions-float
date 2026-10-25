@@ -6,6 +6,8 @@
 
 这个坞不新增数据源，只做聚合：复用同一套标准 Hook（`useSessions` / `useSessionStatus`），筛出 running、pending 或 `completionUnread` 的会话，按最近更新时间排，固定在侧栏底部动作区。它不轮询、不落盘、没有 Host 状态，也不改任何会话。
 
+![侧栏底部实拍：坞头「进行中 1」，下面是「查看提交规则 / 运行中」一行；坞的下方依次是搜索、用量统计、会话与工作区、设置](image/1.png)
+
 | 想知道 | 看 |
 |---|---|
 | 怎么装、怎么用、怎么排错 | 本文件 |
@@ -269,6 +271,7 @@ running-sessions-float/                 ← 仓库根 == 插件包（安装 targ
 ├─ locale/en.json                      # 插件页元数据（meta.title / meta.description）
 ├─ locale/zh.json                      # 同上，中文
 ├─ icon.svg                            # 插件图标
+├─ image/1.png                         # README 顶部的预览截图（文档资产，不进 npm files）
 ├─ README.md
 ├─ IMPLEMENTATION.md
 ├─ AGENTS.md
@@ -424,4 +427,5 @@ node test/smoke.mjs
 | [index.js](index.js) | Host 半边（空 `apply()`） |
 | [package.json](package.json) | 包声明：bundle patch + client 声明 |
 | [cordis.patch.yml](cordis.patch.yml) | 装配行 |
+| [image/1.png](image/1.png) | README 顶部的预览截图：坞在侧栏底部动作区里的一行「运行中」，下面照旧是搜索 / 用量统计 / 会话与工作区 / 设置 |
 | [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（42 项） |
