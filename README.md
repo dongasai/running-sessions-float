@@ -71,6 +71,8 @@ dsh plugin --profile web add github:dongasai/running-sessions-float#0.3
 - **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.3`），tag / 分支 / commit 都行。本仓库当前 tag 是 `0.3`，对应 `package.json` 的 `0.3.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。`0.2` 及更早的 tag 是「包在子目录」的旧布局（`0.1` 还是旧包名 `@local/running-sessions-float`），钉它们装不出当前这套，只能走「克隆 + checkout」。
 - pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器 bundle，由 Host 直接读盘发出），不会遇到。
 
+**本机实测（0.3，临时 `DSH_HOME`）**：`github:dongasai/running-sessions-float#0.3` 装完依赖名是 `@dongasai/running-sessions-float github:dongasai/running-sessions-float#0.3`（不是旧布局那种 `running-sessions-float#0.1 0.0.0`），副本 `package.json` 版本 `0.3.0`，`dsh.profile.bundles` 自动登记，`--dump-config` 能查到装配行（见下面「装完确认」）。
+
 #### 方式三：命令行 · 本地目录（link，开发）
 
 ```bash

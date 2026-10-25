@@ -11,7 +11,7 @@
 
 | 日期 | 变更 |
 |---|---|
-| 2026-10-20 | 初始化架构文档体系：补「模块结构」图与「模块索引」，新增模块级 [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) 与 [.agents/index.json](.agents/index.json)。下方原有命令、硬约束、连带项一字未改。 |
+| 2026-10-20 | 初始化架构文档体系：补「模块结构」图与「模块索引」，新增模块级 `running-sessions-float/AGENTS.md`（2026-10-25 已并入本文件）与 [.agents/index.json](.agents/index.json)。下方原有命令、硬约束、连带项一字未改。 |
 | 2026-10-20 | 发版一致性核对：「改动连带项」的版本行补「未发版期间允许无 tag，README 必须写明」；`.agents/index.json` 改记 `versionSource` 而非版本值，避免多出第 4 处副本。 |
 | 2026-10-20 | 版本号纠偏：首版按阶梯定为 `0.1.0`（原 `1.0.1` 与仓库实际阶段不符）；`package.json`、README 版本行、README 预期输出三处同步；tag 当时未创建，README 暂写明「尚未打 git tag」。 |
 | 2026-10-20 | 发布 `0.1`：提交并打附注 tag `0.1`（指向首个正式版本），推送 main 与 tag；README 版本段从「尚未打 tag」改为钉版本示例。 |
