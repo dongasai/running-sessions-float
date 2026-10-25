@@ -12,7 +12,7 @@
 | 为什么这么实现（槽位取舍、过滤规则、空态、locale 降级） | [IMPLEMENTATION.md](IMPLEMENTATION.md) |
 | 给 agent 的约束、命令、改动连带项 | [AGENTS.md](AGENTS.md) |
 
-本仓库是 DSH 独立插件仓库，当前只有这一个插件；包体在 `running-sessions-float/` 子目录，**仓库根不是包**。
+本仓库是 DSH 独立插件仓库，当前只有这一个插件；**仓库根就是插件包** —— `package.json`、`index.js`、`client.js`、`cordis.patch.yml`、`locale/` 都在根目录，装哪个 profile 都指到仓库根。
 
 ## 功能列表
 
@@ -39,11 +39,14 @@
 
 ### 1. 装插件
 
-**target 必须指到插件子目录 `running-sessions-float/`，不能指仓库根** —— 根目录没有 `package.json`，装到那一步会失败。
+**target 就是仓库根**（`package.json`、`index.js`、`client.js`、`cordis.patch.yml`、`locale/` 都在根目录）。
+2026-10-25 之前包体塞在同名子目录 `running-sessions-float/` 里，`github:` 直装和 `#tag` 钉版本全都装不出来
+（pnpm 把没有 `package.json` 的根当空壳，依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，随后
+`dsh plugin add` 报 `cannot resolve profile bundle`）；那层子目录已经删掉，现在三种装法都指仓库根。
 
 #### 方式一：Web 界面（推荐）
 
-DSH Web → 左侧栏 **插件** → **添加插件** → 填插件子目录的绝对路径（在仓库根执行 `realpath running-sessions-float`）→ **安装** → 装完点 **立即启用**。
+DSH Web → 左侧栏 **插件** → **添加插件** → 填仓库根的绝对路径（在仓库根执行 `realpath .`）→ **安装** → 装完点 **立即启用**。
 
 仓库地址（clone 用）：`https://github.com/dongasai/running-sessions-float.git`
 
@@ -58,43 +61,41 @@ dsh plugin --profile web add github:dongasai/running-sessions-float
 # 或
 dsh plugin --profile web add git+https://github.com/dongasai/running-sessions-float.git
 # 钉版本（URL 后加 #<tag>，锁到某个发布版本来复现问题 / 稳定使用）
-dsh plugin --profile web add github:dongasai/running-sessions-float#0.2
+dsh plugin --profile web add github:dongasai/running-sessions-float#0.3
 ```
 
 `dsh plugin --profile <name> <pnpm args>` 把参数转发给该 profile 目录里的 pnpm。装进来的是**副本**：之后改本仓库代码不影响已装的副本（想边改边用就走方式三）。
 
 - `--profile` **必填**（不写直接报 `required option '--profile <name> not specified'`）。
 - **必须带 `git+` 或 `github:` 前缀**。`git@github.com:owner/repo.git` 这种 scp 写法不会被认成 git spec，pnpm 会把它当路径，装出一条指向不存在目录的 `link:` 死链。
-- **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.2`），tag / 分支 / commit 都行；本仓库当前 tag 是 `0.2`，对应 `package.json` 的 `0.2.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。**`0.1` 及更早的 tag 里包名还是 `@local/running-sessions-float`**，钉它们装不出当前这套。
+- **钉版本**：URL 后加 `#`（上面第三条就是钉 `0.3`），tag / 分支 / commit 都行。本仓库当前 tag 是 `0.3`，对应 `package.json` 的 `0.3.0` —— 不带 `#` 则跟 `main` 走，每次装到的都可能是新代码。`0.2` 及更早的 tag 是「包在子目录」的旧布局（`0.1` 还是旧包名 `@local/running-sessions-float`），钉它们装不出当前这套，只能走「克隆 + checkout」。
 - pnpm 默认会拦 `prepare` 等依赖构建脚本；本包**没有任何构建步骤**（`client.js` 是手写的浏览器 bundle，由 Host 直接读盘发出），不会遇到。
-
-**实测：这组命令对本仓库装不出可用副本。** 仓库根没有 `package.json`，pnpm 只认根目录那个包，装进来的依赖名落成 `running-sessions-float#0.1`、版本 `0.0.0`，`dsh plugin add` 随后报 `cannot resolve profile bundle "running-sessions-float#0.1"`。要真装，走方式三，或先 clone + checkout tag 再 `link:`（见下）。
 
 #### 方式三：命令行 · 本地目录（link，开发）
 
 ```bash
 # 在仓库根执行；--profile 必填，web 换成你要装进的 profile
-dsh plugin --profile web add "link:$(realpath running-sessions-float)"
+dsh plugin --profile web add "link:$(pwd)"
 ```
 
 `dsh plugin --profile <name> <pnpm args>` 把参数转发给该 profile 目录里的 pnpm。`link:` 装的是**软链**：改仓库里的 `client.js`，客户端半边会在一两秒内换新（见「生效条件」）。
 
 这条命令要写 profile 目录，在宿主 shell 里跑；受限的 Agent 沙箱通常写不了 `~/.dsh`。
 
-**让 Agent 装**（等价路径，不是命令行）：`action: install_bundle`、`target: link:<仓库绝对路径>/running-sessions-float`。这个动作需要 **danger-full-access** 批准（它会改 profile、装包、可能跑安装脚本）；返回 `application: applied` 才算当场生效，`restart-required` 表示要重启 Harness。
+**让 Agent 装**（等价路径，不是命令行）：`action: install_bundle`、`target: link:<仓库绝对路径>`（或 `github:dongasai/running-sessions-float#0.3`）。这个动作需要 **danger-full-access** 批准（它会改 profile、装包、可能跑安装脚本）；返回 `application: applied` 才算当场生效，`restart-required` 表示要重启 Harness。
 
 #### 钉版本：克隆 + checkout tag
 
-tag `0.2` 真实存在，对应 `package.json` 的 `0.2.0`。`#0.2` 这种 URL 钉法实测装不出可用副本（见方式二），所以钉版本这样装：
+tag `0.3` 真实存在，对应 `package.json` 的 `0.3.0`。想连 git 历史一起钉住时这样装：
 
 ```bash
 git clone https://github.com/dongasai/running-sessions-float.git
 cd running-sessions-float
-git checkout 0.2
-dsh plugin --profile web add "link:$(realpath running-sessions-float)"
+git checkout 0.3
+dsh plugin --profile web add "link:$(pwd)"
 ```
 
-clone 下来的目录里还有一层同名子目录，`realpath` 要指到里面那层。
+`0.2` 及更早的 tag 里包还在子目录，`realpath` 要指到 `<clone>/running-sessions-float`（那一层已在新版删掉）。
 
 #### 包名与旧版本
 
@@ -109,7 +110,7 @@ clone 下来的目录里还有一层同名子目录，`realpath` 要指到里面
 # 1) 移除旧名（先卸再装，避免两个名字同时被装配）
 dsh plugin --profile web remove @local/running-sessions-float
 # 2) 用当前仓库装新名
-dsh plugin --profile web add "link:$(realpath running-sessions-float)"
+dsh plugin --profile web add "link:$(pwd)"
 # 3) 确认依赖名、bundles 选中项、软链三处都换了
 grep -n running-sessions-float ~/.dsh/profiles/web/package.json
 ls -l ~/.dsh/profiles/web/node_modules/@dongasai/running-sessions-float
@@ -138,12 +139,13 @@ dsh --profile web --dump-config | grep -A2 running-sessions-float
 
 **运行中的实例要重启才会加载它**（插件行在启动时合成）。
 
-**四条通用坑**：
+**五条通用坑**：
 
 1. `--profile` 必填 —— 不写直接报 `error: required option '--profile <name>' not specified`。
 2. 只加依赖、没登记 `dsh.profile.bundles` = 装了不挂载 —— 命令行的 `dsh plugin add` 写的是依赖，挂载还取决于 `bundles`；实测清空 `bundles` 后 `--dump-config` 输出为空，所以装完必须用上面的命令验一遍。
 3. git spec 必须带 `github:` / `git+` 前缀 —— `git@github.com:owner/repo.git` 这种 scp 写法会被 pnpm 当成本地路径，装出一条指向不存在目录的 `link:` 死链。
-4. 钉版本的 tag 必须真实存在 —— 本仓库是 `0.2`（对应 `0.2.0`）；`0.1` 及更早是旧包名 `@local/running-sessions-float`。只能用「克隆 + checkout」，不能 URL 钉版本。
+4. 钉版本的 tag 必须真实存在 —— 本仓库是 `0.3`（对应 `0.3.0`）。`0.2` 及更早的 tag 是「包在子目录」的旧布局、`0.1` 还是旧包名 `@local/running-sessions-float`，钉它们装不出当前这套；那些版本只能「克隆 + checkout + link 子目录」。
+5. **不要在仓库根下再套一层同名子目录** —— 根没有 `package.json` 时 pnpm 会把仓库当空壳（依赖名落成 `running-sessions-float#0.3`、版本 `0.0.0`），`dsh plugin add` 随后报 `cannot resolve profile bundle`。2026-10-25 已按这条把结构改回「根即包」。
 
 本仓库 `private: true`、未发布 npm，**没有 registry 装法**；`package.json` 里没有声明任何 DSH peer 依赖，不会触发版本兼容闸。
 
@@ -257,31 +259,31 @@ target: @dongasai/running-sessions-float
 ## 结构
 
 ```text
-running-sessions-float/                 ← 仓库根（不是包）
+running-sessions-float/                 ← 仓库根 == 插件包（安装 target）
+├─ package.json                        # name / version / exports / files / dsh.bundle + dsh.client
+├─ cordis.patch.yml                    # insert 一行插件入口
+├─ index.js                            # Host 半边：export function apply() {}（8 行）
+├─ client.js                           # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（477 行）
+├─ locale/en.json                      # 插件页元数据（meta.title / meta.description）
+├─ locale/zh.json                      # 同上，中文
+├─ icon.svg                            # 插件图标
 ├─ README.md
 ├─ IMPLEMENTATION.md
 ├─ AGENTS.md
-├─ test/smoke.mjs                       ← 无 DOM 冒烟 + 包契约（42 项）
-├─ .agents/index.json                   ← 架构扫描状态：模块清单 / 覆盖率 / 缺口
-└─ running-sessions-float/              ← 包体（安装 target）
-   ├─ package.json                      # name / version / exports / files / dsh.bundle + dsh.client
-   ├─ cordis.patch.yml                  # insert 一行插件入口
-   ├─ index.js                          # Host 半边：export function apply() {}（8 行）
-   ├─ client.js                         # 浏览器半边：CSS + 组件 + sidebar.footer.action 注册（477 行）
-   ├─ locale/en.json                    # 插件页元数据（meta.title / meta.description）
-   ├─ locale/zh.json                    # 同上，中文
-   ├─ AGENTS.md                         # 模块级文档（职责 / 接口 / 数据形状 / FAQ）
-   └─ icon.svg                          # 插件图标
+├─ test/smoke.mjs                      ← 无 DOM 冒烟 + 包契约（42 项）
+└─ .agents/index.json                  ← 架构扫描状态：模块清单 / 覆盖率 / 缺口
 ```
+
+`README.md` / `IMPLEMENTATION.md` / `AGENTS.md` / `test/` / `.agents/` 靠 `package.json` 的 `files` 白名单挡在包外，只进 git。
 
 | 文件 | 行数 | 作用 |
 |---|---:|---|
-| `running-sessions-float/package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
-| `running-sessions-float/cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@dongasai/running-sessions-float` |
-| `running-sessions-float/index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
-| `running-sessions-float/client.js` | 477 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
-| `running-sessions-float/locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
-| `running-sessions-float/icon.svg` | 11 | 插件图标 |
+| `package.json` | 32 | 包声明：`dsh.bundle.patch` 指向 patch，`dsh.client` 声明 web 平台、启动即加载、依赖 session UI 包 |
+| `cordis.patch.yml` | 3 | `insert` 一行 `running-sessions-float` → `@dongasai/running-sessions-float` |
+| `index.js` | 8 | Host 半边，空 `apply()`；不提供服务、不注册工具、不挂路由 |
+| `client.js` | 477 | 浏览器半边：样式、组件、locale 注册、`sidebar.footer.action` 注册 |
+| `locale/*.json` | 6 × 2 | 只给插件页的标题 / 描述；界面文案在 `client.js` 的 `DICTS` 里 |
+| `icon.svg` | 11 | 插件图标 |
 | `AGENTS.md` | — | 给 agent 的命令、硬约束与改动连带项 |
 | `test/smoke.mjs` | 324 | 无 DOM 组件冒烟 + 包契约（42 项） |
 
@@ -321,7 +323,7 @@ running-sessions-float/                 ← 仓库根（不是包）
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 插件页装不上，报 `not-bundle` 或找不到 manifest | target 指到仓库根 | 指到 `running-sessions-float/running-sessions-float` |
+| 插件页装不上，报 `not-bundle` 或找不到 manifest | target 没指到仓库根（或指到了已删除的旧子目录） | 指到仓库根；`package.json` 就在根目录 |
 | 装完界面没变化 | 只装没启用 / profile 启动时装配 | 插件页点「立即启用」；`application: restart-required` 时重启 Harness |
 | 坞没出现，插件却是启用状态 | 页面还是旧模块代次 / 推送还没到 | 等一两秒；刷新页面；仍无则重启 Harness（无 `client-hmr` 的部署） |
 | 坞一直「暂无进行中」 | 没有 running / pending / 完成未读的会话；或它们都是空白 / subagent 会话（被过滤） | 去另一个会话发一条消息；确认不是刚建的空会话 |
@@ -334,7 +336,8 @@ running-sessions-float/                 ← 仓库根（不是包）
 | 坞把上方会话列表挤短了 | 坞在底部动作区里占的是真实布局，不是浮层 | 预期行为：坞展开时列表相应变短；行多时坞内滚动，最高 200px |
 | 用量统计 / 会话管理 不见了 | 坞没能给那行加 `flex-wrap: wrap`，不换行时全宽坞把兄弟入口挤出可视区 | 看控制台有没有 `closest` 报错；宿主改过 `data-slot` 锚点时改选择器 |
 | 卸载后仍被装配 | 只跑了 `pnpm remove`，没取消 bundle 选中 | 从插件页卸载，或用 `plugin_manager` 的 `remove_bundle`（先取消选中再删包） |
-| 按 `#0.2` 装不出来，或装到旧代码 | 包在子目录，URL 钉版本要求仓库根就是包；`#` 只对能直装的仓库有效 | 克隆后 `git checkout 0.2`，再 `link:` 子目录（见「装法四条坑」第 4 条） |
+| 按 `#0.2` 或更早的 tag 装不出来 | 那些 tag 里包还在子目录，URL 钉版本要求仓库根就是包 | 克隆后 `git checkout <tag>`，再 `link:` 到 `<clone>/running-sessions-float`（见「装法五条坑」第 4 条） |
+| `#0.3` 装不出来，或跑出 `cannot resolve profile bundle` | 仓库根没有 `package.json`（有人又把包塞回子目录了） | 恢复「根即包」结构：`package.json` / `index.js` / `client.js` / patch / `locale` 必须在根（见「装法五条坑」第 5 条） |
 | 坞里的行数比侧栏会话少 | 空白会话与 subagent 会话被刻意过滤 | 预期行为；去侧栏对应工作区看它们 |
 | 改了 `locale/*.json` 文案没变 | 那两份只放插件页 meta，坞内文案在 `client.js` 的 `DICTS` | 改 `DICTS` 后重新装；插件页 meta 要重新装配才刷新 |
 
@@ -344,18 +347,17 @@ running-sessions-float/                 ← 仓库根（不是包）
 
 ```bash
 # 1) 语法
-node --check running-sessions-float/client.js
-node --check running-sessions-float/index.js
+node --check client.js
+node --check index.js
 
 # 2) 包声明与 patch
 node -e '
 const fs = require("fs");
-const dir = "running-sessions-float";
-const pkg = JSON.parse(fs.readFileSync(dir + "/package.json", "utf8"));
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 console.log(pkg.name, pkg.version);
 console.log(pkg.dsh.bundle.patch, pkg.dsh.client.inject);
 '
-# 预期：@dongasai/running-sessions-float 0.2.0
+# 预期：@dongasai/running-sessions-float 0.3.0
 #       ./cordis.patch.yml [ '@deepseek-ai/dsh-client-ui-session' ]
 
 # 3) 组件行为 + 包契约（无 DOM，42 项）
@@ -415,10 +417,9 @@ node test/smoke.mjs
 |---|---|
 | [README.md](README.md) | 本文件：怎么装、怎么用、怎么排错、怎么验证 |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | 为什么这么实现：槽位取舍、过滤规则、空态、locale 降级、生效路径 |
-| [AGENTS.md](AGENTS.md) | 给 agent 的：命令、硬约束、改动连带项 |
-| [running-sessions-float/AGENTS.md](running-sessions-float/AGENTS.md) | 给 agent 的模块级细节：职责、接口契约、数据形状、FAQ |
-| [client.js](running-sessions-float/client.js) | 浏览器半边：样式、组件、slot 注册 |
-| [index.js](running-sessions-float/index.js) | Host 半边（空 `apply()`） |
-| [package.json](running-sessions-float/package.json) | 包声明：bundle patch + client 声明 |
-| [cordis.patch.yml](running-sessions-float/cordis.patch.yml) | 装配行 |
+| [AGENTS.md](AGENTS.md) | 给 agent 的：命令、硬约束、改动连带项、接口契约、数据形状、FAQ |
+| [client.js](client.js) | 浏览器半边：样式、组件、slot 注册 |
+| [index.js](index.js) | Host 半边（空 `apply()`） |
+| [package.json](package.json) | 包声明：bundle patch + client 声明 |
+| [cordis.patch.yml](cordis.patch.yml) | 装配行 |
 | [test/smoke.mjs](test/smoke.mjs) | 无 DOM 冒烟 + 包契约（42 项） |

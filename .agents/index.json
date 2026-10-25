@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-10-23T01:30:00+0800",
+  "generatedAt": "2026-10-25T12:30:00+0800",
   "generator": "init-architect",
   "root": {
     "name": "running-sessions-float",
     "packageName": "@dongasai/running-sessions-float",
-    "versionSource": "running-sessions-float/package.json",
-    "kind": "single-plugin repository (package lives in a subdirectory; repo root is not installable)",
+    "versionSource": "package.json",
+    "kind": "single-plugin repository (repo root == package == install target; no subdirectory)",
     "stack": ["JavaScript (ESM)", "Node 18+ (vm for tests)", "DSH client bundle", "CSS (theme tokens)"],
     "build": "none",
     "dependencies": "none",
     "rootAgents": "AGENTS.md",
-    "docs": ["README.md", "IMPLEMENTATION.md", "AGENTS.md", "running-sessions-float/AGENTS.md"]
+    "docs": ["README.md", "IMPLEMENTATION.md", "AGENTS.md"]
   },
   "ignoreRules": {
     "source": ".gitignore",
@@ -30,10 +30,10 @@
   "modules": [
     {
       "name": "running-sessions-float",
-      "path": "running-sessions-float/",
-      "role": "可安装插件包：Host 半边为空，浏览器半边在 sidebar.footer.action 注册「进行中」会话坞（正常流，不浮层）",
+      "path": ".",
+      "role": "可安装插件包（仓库根即包）：Host 半边为空，浏览器半边在 sidebar.footer.action 注册「进行中」会话坞（正常流，不浮层）",
       "language": "JavaScript (ESM) + CSS",
-      "entry": ["running-sessions-float/index.js", "running-sessions-float/client.js"],
+      "entry": ["index.js", "client.js"],
       "interfaces": [
         "slot sidebar.footer.action: id=running-sessions-float, order=-10, scope=root, no patterns, owner props { wide }; 挂载时 promoteFooterContainer 给该行加 flex-wrap:wrap（含 :has() 兜底；不能改成 column，100% 基准会按高度算），否则会挤掉官方入口",
         "locale namespace local.runningSessions (en/zh, 8 keys each)",
@@ -43,28 +43,28 @@
         "side effect out: uiWorkspace.openSession(id)"
       ],
       "config": [
-        "running-sessions-float/package.json (dsh.bundle.patch, dsh.client)",
-        "running-sessions-float/cordis.patch.yml",
-        "running-sessions-float/locale/zh.json",
-        "running-sessions-float/locale/en.json"
+        "package.json (dsh.bundle.patch, dsh.client)",
+        "cordis.patch.yml",
+        "locale/zh.json",
+        "locale/en.json"
       ],
       "tests": ["test/smoke.mjs"],
       "importantPaths": [
-        "running-sessions-float/client.js (477 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
-        "running-sessions-float/index.js (8 lines: empty apply)",
-        "running-sessions-float/package.json",
-        "running-sessions-float/cordis.patch.yml"
+        "client.js (477 lines: DICTS/promoteFooterContainer/CSS/useTranslator/pendingLabel/RunningSessionsDock/apply)",
+        "index.js (8 lines: empty apply)",
+        "package.json",
+        "cordis.patch.yml"
       ],
-      "doc": "running-sessions-float/AGENTS.md",
+      "doc": "AGENTS.md",
       "scannedFiles": [
-        "running-sessions-float/package.json",
-        "running-sessions-float/cordis.patch.yml",
-        "running-sessions-float/index.js",
-        "running-sessions-float/client.js",
-        "running-sessions-float/locale/zh.json",
-        "running-sessions-float/locale/en.json"
+        "package.json",
+        "cordis.patch.yml",
+        "index.js",
+        "client.js",
+        "locale/zh.json",
+        "locale/en.json"
       ],
-      "pathOnlyFiles": ["running-sessions-float/icon.svg"],
+      "pathOnlyFiles": ["icon.svg"],
       "gaps": [
         "「已完成」只覆盖主视图之外的结束（官方在会话是主视图时清 completionUnread），且只能靠打开会话清除；坞不做「全部已读」"
       ]
@@ -83,16 +83,16 @@
       "scannedFiles": ["test/smoke.mjs"],
       "pathOnlyFiles": [],
       "gaps": [
-        "无独立模块文档（有意并入根 AGENTS.md「验证规范」与插件包文档「测试与质量」，避免与 31 项断言重复）"
+        "无独立模块文档（有意并入根 AGENTS.md「验证规范」，避免与 34 项断言重复）"
       ]
     }
   ],
   "coverage": {
-    "estimatedTotalFiles": 12,
-    "scannedFiles": 11,
+    "estimatedTotalFiles": 11,
+    "scannedFiles": 10,
     "pathOnlyFiles": 1,
-    "percent": 91.7,
-    "textFilesFullyRead": 11,
+    "percent": 90.9,
+    "textFilesFullyRead": 10,
     "truncated": false,
     "perModule": {
       "running-sessions-float": "6/6 文本文件读完；icon.svg 仅记路径",
@@ -100,7 +100,7 @@
     },
     "notRead": [
       {
-        "path": "running-sessions-float/icon.svg",
+        "path": "icon.svg",
         "reason": "资源文件，按规则只记路径，不读内容"
       }
     ]
@@ -112,7 +112,7 @@
   ],
   "nextSteps": [
     "续扫入口：读本文件 gaps / coverage.notRead，优先补 icon.svg 之外的新增文件",
-    "新增第二个包或子模块时，拆出对应模块级 AGENTS.md 并更新根「模块索引」与 Mermaid 图",
+    "仓库根就是包，不要再加子目录层；新增包时另开仓库而不是在本仓库里套子目录",
     "发版时同步 package.json version、git tag、README「结构」表与版本行（三处一起动）",
     "改动过滤/排序/文案/状态归类时，按根 AGENTS.md「改动连带项」同步 smoke、README、IMPLEMENTATION"
   ]

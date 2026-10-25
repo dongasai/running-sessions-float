@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const clientPath = join(here, '..', 'running-sessions-float', 'client.js');
+const clientPath = join(here, '..', 'client.js');
 const source = readFileSync(clientPath, 'utf8');
 
 const Fragment = Symbol('Fragment');
@@ -299,7 +299,7 @@ check('unmount restores the footer row',
 check('en dictionary registered', locale.registered?.dicts?.en?.title === 'In progress');
 
 // Package + bundle contract, so a manifest/patch drift fails here instead of at install time.
-const root = join(here, '..', 'running-sessions-float');
+const root = join(here, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const patchText = readFileSync(join(root, 'cordis.patch.yml'), 'utf8');
 const clientId = /id:\s*'([^']+)'/.exec(source)?.[1];
